@@ -1,0 +1,2017 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="locked">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<meta name="theme-color" content="#04050b" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Latent · 潜空间</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --fg: #efe9e1;
+    --dim: rgba(239, 233, 225, .5);
+    --en: "Cormorant Garamond", "Didot", "Bodoni 72", Georgia, serif;
+    --zh: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
+    --mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { background: #04050b; scrollbar-width: none; }
+  html::-webkit-scrollbar { display: none; }
+  body {
+    color: var(--fg); font-family: var(--zh); -webkit-font-smoothing: antialiased;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+
+  #gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #track { display: none; }
+
+  /* ---------- HUD ---------- */
+  .hud { position: fixed; z-index: 5; pointer-events: none; opacity: 0; transition: opacity 1.4s ease; }
+  body.ready .hud { opacity: 1; }
+  #brand {
+    top: calc(var(--safe-t) + 20px); left: 22px;
+    font-family: var(--en); font-style: italic; font-size: 17px; letter-spacing: .06em;
+  }
+  #brand small { font-family: var(--mono); font-style: normal; font-size: 9px; letter-spacing: .3em; color: var(--dim); margin-left: 10px; vertical-align: 2px; }
+  #snd {
+    position: fixed; z-index: 6; top: calc(var(--safe-t) + 16px); right: 18px; pointer-events: auto;
+    font-family: var(--mono); font-size: 9px; letter-spacing: .3em; color: var(--dim);
+    padding: 8px 10px; border: 1px solid rgba(239, 233, 225, .16); border-radius: 20px;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    opacity: 0; transition: opacity 1.4s ease, color .3s;
+  }
+  body.ready #snd { opacity: 1; }
+  #snd.on { color: var(--fg); border-color: rgba(239, 233, 225, .4); }
+
+  #rail { right: 20px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  #rail .bar { width: 1px; height: 120px; background: rgba(239, 233, 225, .15); position: relative; }
+  #rail .bar i { position: absolute; left: 0; top: 0; width: 1px; height: 100%; background: var(--fg); transform-origin: top; transform: scaleY(0); }
+  #rail ol { list-style: none; display: flex; flex-direction: column; gap: 9px; font-family: var(--en); font-style: italic; font-size: 11px; text-align: center; }
+  #rail li { color: rgba(239, 233, 225, .3); transition: color .6s, transform .6s; }
+  #rail li.on { color: var(--fg); transform: scale(1.25); }
+  #pct {
+    left: 22px; bottom: calc(var(--safe-b) + 20px);
+    font-family: var(--mono); font-size: 9px; letter-spacing: .25em; color: var(--dim);
+  }
+
+  /* ---------- 章节文字 ---------- */
+  .ch {
+    position: fixed; z-index: 4; pointer-events: none;
+    left: 26px; right: 56px; bottom: calc(var(--safe-b) + 64px);
+  }
+  .ch .no { font-family: var(--en); font-style: italic; font-weight: 300; font-size: 15px; letter-spacing: .2em; color: var(--dim); display: flex; align-items: center; gap: 12px; }
+  .ch .no::after { content: ""; width: 34px; height: 1px; background: currentColor; transform-origin: left; transform: scaleX(0); transition: transform 1.2s cubic-bezier(.2, .7, .2, 1); }
+  .ch .zh { font-size: min(21px, 5.4vw); line-height: 1.75; letter-spacing: .14em; margin: 14px 0 10px; text-shadow: 0 0 24px rgba(0, 0, 0, .6); }
+  .ch .en { font-family: var(--en); font-style: italic; font-weight: 300; font-size: 15px; letter-spacing: .04em; color: var(--dim); }
+  .ch .zh span { display: inline-block; opacity: 0; filter: blur(10px); transform: translateY(10px); transition: opacity .9s ease, filter .9s ease, transform .9s cubic-bezier(.2, .7, .2, 1); }
+  .ch .en, .ch .no { opacity: 0; transition: opacity 1.2s ease .3s; }
+  .ch.on .zh span { opacity: 1; filter: blur(0); transform: none; }
+  .ch.on .en, .ch.on .no { opacity: 1; }
+  .ch.on .no::after { transform: scaleX(1); }
+
+  /* 开场 */
+  #intro {
+    position: fixed; z-index: 4; inset: 0; pointer-events: none;
+    display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; text-align: left;
+    padding: calc(var(--safe-t) + 19vh) 26px 0;
+    transition: opacity .8s ease;
+  }
+  #intro .kick { font-family: var(--mono); font-size: 9px; letter-spacing: .45em; color: var(--dim); margin-bottom: 14px; }
+  #intro h1 {
+    font-family: var(--en); font-weight: 300; font-style: italic;
+    font-size: clamp(72px, 23vw, 150px); line-height: .95; letter-spacing: -.02em; margin-left: -.04em;
+    text-shadow: 0 0 40px rgba(170, 190, 255, .18);
+  }
+  #intro .sub { font-size: 13px; letter-spacing: .6em; margin-top: 18px; color: rgba(239, 233, 225, .85); }
+  #intro .swipe {
+    position: absolute; bottom: calc(var(--safe-b) + 26px); right: 24px; align-items: flex-end !important;
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: .4em; text-indent: .4em; color: var(--dim);
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+  }
+  #intro .swipe i { width: 1px; height: 42px; background: linear-gradient(transparent, var(--fg)); animation: drip 2.2s ease-in-out infinite; transform-origin: top; }
+  @keyframes drip { 0% { transform: scaleY(0); opacity: 1; } 60% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
+  #intro > * { opacity: 0; transform: translateY(16px); filter: blur(8px); transition: all 1.6s cubic-bezier(.2, .7, .2, 1); }
+  body.formed #intro > * { opacity: 1; transform: none; filter: none; }
+  body.formed #intro h1 { transition-delay: .2s; }
+  body.formed #intro .sub { transition-delay: .5s; }
+  body.formed #intro .swipe { transition-delay: 1.1s; }
+
+  /* ---------- 第一面排版 ---------- */
+  #intro .d0 { position: absolute; left: 0; top: 0; }
+  body.formed #intro .d0 { transition-delay: 1.6s; }
+  body.formed #intro .d0-poem { transition-delay: 2.2s; }
+  body.formed #intro .d0-fig { transition-delay: 1.2s; }
+  .d0-fig {
+    left: 22px !important; top: calc(var(--safe-t) + 64px) !important;
+    font-family: var(--mono); font-size: 8.5px; letter-spacing: .28em; color: var(--dim); line-height: 1.9;
+  }
+  .d0-fig b { font-weight: 400; color: var(--fg); }
+  .d0-fig hr { border: 0; height: 1px; width: 110px; background: rgba(239, 233, 225, .25); margin: 6px 0 7px; }
+  .d0-tag { display: flex; align-items: center; gap: 8px; white-space: nowrap; pointer-events: none; }
+  .d0-tag .t { font-family: var(--mono); font-size: 8.5px; letter-spacing: .24em; color: var(--dim); line-height: 1.7; }
+  .d0-tag .t b { display: block; font-family: var(--zh); font-weight: 400; font-size: 12px; letter-spacing: .3em; color: var(--fg); }
+  .d0-tag i { display: block; width: 34px; height: 1px; background: linear-gradient(90deg, rgba(239, 233, 225, .7), rgba(239, 233, 225, .15)); }
+  .d0-moon, .d0-peak { flex-direction: row-reverse; }
+  .d0-moon .t, .d0-peak .t { text-align: right; }
+  .d0-moon i, .d0-peak i { background: linear-gradient(90deg, rgba(239, 233, 225, .15), rgba(239, 233, 225, .7)); }
+  .d0-poem {
+    left: 22px !important; top: 52vh !important; display: flex; flex-direction: column; align-items: flex-start; gap: 14px;
+  }
+  .d0-poem .cols { display: flex; flex-direction: row-reverse; gap: 4px;
+  }
+  .d0-poem p {
+    writing-mode: vertical-rl; font-size: 13px; letter-spacing: .55em; line-height: 2.1; color: rgba(239, 233, 225, .78);
+    text-shadow: 0 0 18px rgba(0, 0, 0, .8);
+  }
+  .d0-poem .seal {
+    width: 20px; height: 20px; border: 1px solid #b4563f; color: #c4664c; font-size: 11px; line-height: 18px; text-align: center;
+    border-radius: 2px; opacity: .85;
+  }
+
+  /* ---------- 唤月 ---------- */
+  #moonBtn {
+    position: fixed; z-index: 7; left: 0; top: 0; margin: -30px 0 0 -30px; width: 60px; height: 60px; border-radius: 50%;
+    border: 1px solid rgba(239, 233, 225, .55); opacity: 0;
+    transition: opacity 1.6s ease .8s, scale 1.4s cubic-bezier(.6, 0, .2, 1);
+  }
+  body.ready #moonBtn { opacity: 1; }
+  #moonBtn::before {
+    content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%;
+    background: #fff; box-shadow: 0 0 12px 2px rgba(220, 230, 255, .8);
+  }
+  #moonBtn i { position: absolute; inset: -1px; border-radius: 50%; border: 1px solid rgba(239, 233, 225, .5); animation: ripple 3s cubic-bezier(.2, .7, .2, 1) infinite; }
+  #moonBtn i:nth-child(2) { animation-delay: 1.5s; }
+  @keyframes ripple { from { transform: scale(1); opacity: .8; } to { transform: scale(2.3); opacity: 0; } }
+  body.calling #moonBtn { opacity: 0; scale: .4; pointer-events: none; transition: opacity 1.2s ease, scale 1.4s cubic-bezier(.6, 0, .2, 1); }
+
+  #guide { position: fixed; z-index: 6; inset: 0; pointer-events: none; transition: opacity 1.2s ease; }
+  body.calling #guide { opacity: 0; }
+  #guide .call {
+    position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 12px; white-space: nowrap;
+    font-family: var(--mono); font-size: 9px; letter-spacing: .4em; color: var(--dim);
+  }
+  #guide .call::after { content: ""; width: 30px; height: 1px; background: linear-gradient(90deg, transparent, rgba(239, 233, 225, .6)); }
+  #guide .poem { position: absolute; left: 26px; right: 26px; top: 46%; }
+  #guide .poem p:first-child { font-size: min(22px, 5.8vw); letter-spacing: .3em; line-height: 1.9; font-weight: 300; }
+  #guide .poem p:last-child { font-family: var(--en); font-style: italic; font-size: 14px; color: var(--dim); margin-top: 10px; letter-spacing: .03em; }
+  #guide > * { opacity: 0; transform: translateY(12px); filter: blur(8px); transition: all 2s cubic-bezier(.2, .7, .2, 1); }
+  body.ready #guide > * { opacity: 1; transform: none; filter: none; }
+  body.ready #guide .call { transition-delay: 1.4s; }
+  html.locked, html.locked body { overflow: hidden; height: 100%; }
+
+  #loading {
+    position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 10px; letter-spacing: .4em; color: var(--dim); background: #04050b;
+    transition: opacity 1.2s ease;
+  }
+  body.ready #loading { opacity: 0; pointer-events: none; }
+
+  #end {
+    position: fixed; z-index: 4; left: 0; right: 0; bottom: calc(var(--safe-b) + 46px); text-align: center; pointer-events: none;
+    opacity: 0; transition: opacity 2s ease;
+  }
+  /* 最后一章文字移到顶部，把下半屏留给海和船 */
+  .ch[data-k="7"] { top: calc(var(--safe-t) + 78px); bottom: auto; }
+
+  /* ---------- 资料章节：ii 荼归 · iv 风格 · vi 须知 ---------- */
+  .info { bottom: calc(var(--safe-b) + 52px); }
+  .info::before {
+    content: ""; position: absolute; z-index: -1; left: -26px; right: -56px; top: -70px; bottom: calc(-52px - var(--safe-b));
+    background: linear-gradient(to top, rgba(4, 5, 11, .82) 35%, rgba(4, 5, 11, 0));
+    opacity: 0; transition: opacity 1.2s ease;
+  }
+  .info.on::before { opacity: 1; }
+  .info .r { opacity: 0; filter: blur(8px); transform: translateY(10px); transition: opacity 1s ease, filter 1s ease, transform 1s cubic-bezier(.2, .7, .2, 1); }
+  .info.on .r { opacity: 1; filter: none; transform: none; }
+  .info .lb { display: block; font-family: var(--mono); font-size: 8.5px; letter-spacing: .32em; color: var(--dim); margin-bottom: 8px; }
+  .info .nm { font-weight: 400; font-size: min(34px, 9vw); letter-spacing: .3em; margin: 14px 0 18px; text-shadow: 0 0 30px rgba(255, 190, 210, .35); }
+  .info .nm em { font-family: var(--en); font-style: italic; font-weight: 300; color: var(--dim); margin: 0 .25em 0 -.05em; letter-spacing: 0; }
+  .info .cells { display: flex; border-top: 1px solid rgba(239, 233, 225, .2); border-bottom: 1px solid rgba(239, 233, 225, .2); }
+  .info .cells > div { flex: 1; padding: 11px 0 9px; text-align: center; }
+  .info .cells > div + div { border-left: 1px solid rgba(239, 233, 225, .12); }
+  .info .cells b { display: block; font-weight: 400; font-size: 16px; letter-spacing: .12em; }
+  .info .cells small { display: block; font-family: var(--mono); font-size: 7.5px; letter-spacing: .3em; color: var(--dim); margin-top: 5px; }
+  .info .price { margin-top: 16px; display: flex; align-items: baseline; gap: 14px; }
+  .info .price b { font-family: var(--en); font-weight: 300; font-size: 30px; letter-spacing: .04em; }
+  .info .price b i { font-style: italic; color: var(--dim); margin: 0 .2em; }
+  .info .price .lb { margin: 0; }
+  .info .main { display: flex; flex-wrap: wrap; gap: 4px 0; margin: 2px 0 22px; }
+  .info .main span { font-size: min(21px, 4.9vw); letter-spacing: .1em; white-space: nowrap; text-shadow: 0 0 24px rgba(255, 150, 180, .4); }
+  .info .main span + span::before { content: "·"; color: var(--dim); margin: 0 .3em 0 .1em; }
+  .info .tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  .info .tags span { font-size: 12.5px; letter-spacing: .18em; padding: 5px 10px 5px 12px; border: 1px solid rgba(239, 233, 225, .22); border-radius: 20px; background: rgba(4, 5, 11, .35); }
+  .info .ttl { font-weight: 400; font-size: 17px; letter-spacing: .32em; margin: 12px 0 14px; }
+  .info .q { font-size: 13px; letter-spacing: .22em; color: #ffd6df; text-shadow: 0 0 18px rgba(255, 150, 180, .45); margin: 12px 0 6px; }
+  .info ol { list-style: none; }
+  .info ol li { font-size: 12.5px; letter-spacing: .08em; line-height: 2; color: rgba(239, 233, 225, .86); display: flex; gap: 10px; }
+  .info ol li::before { content: attr(data-n); font-family: var(--mono); font-size: 8.5px; letter-spacing: .1em; color: var(--dim); padding-top: 2px; flex: none; }
+  .info ol li b { font-weight: 400; color: #ffd6df; }
+  .info ol li small { display: block; font-size: 10.5px; letter-spacing: .06em; line-height: 1.6; color: var(--dim); }
+  .rules .ttl { margin: 8px 0 10px; }
+  .rules ol li { font-size: 11.5px; letter-spacing: .05em; line-height: 1.7; padding: 1px 0; }
+  .rules ol li::before { padding-top: 1px; }
+  .rules::before { top: -110px; }
+  /* 横屏：资料卡放到右侧，形状偏左；落款移到右下角，避开船 */
+  @media (min-aspect-ratio: 1/1) {
+    #end { left: auto; right: 80px; text-align: right; }
+    .info { left: auto; right: 9vw; width: 380px; bottom: auto; top: 50%; transform: translateY(-50%); }
+    .info::before { left: -60px; right: -60px; top: -60px; bottom: -60px; background: radial-gradient(closest-side, rgba(4, 5, 11, .7), rgba(4, 5, 11, 0)); }
+  }
+
+  /* ---------- 杂志式排版层 ---------- */
+  #decos { position: fixed; inset: 0; z-index: 3; pointer-events: none; will-change: transform; }
+  .deco { position: absolute; inset: 0; visibility: hidden; transition: visibility 0s 1.2s; }
+  .deco.on { visibility: visible; transition: none; }
+  .deco > * { position: absolute; opacity: 0; transition: opacity 1.2s ease, transform 1.8s cubic-bezier(.2, .7, .2, 1), letter-spacing 2.2s cubic-bezier(.2, .7, .2, 1), clip-path 1.4s cubic-bezier(.6, 0, .2, 1); }
+  .deco.on > * { opacity: 1; }
+
+  .giant {
+    left: -3vw; top: calc(var(--safe-t) + 15vh); white-space: nowrap;
+    font-family: var(--en); font-style: italic; font-weight: 300; font-size: 33vw; line-height: 1;
+    color: transparent; -webkit-text-stroke: 1px rgba(239, 233, 225, .2);
+    letter-spacing: .12em; transform: translateX(-8%);
+  }
+  .deco.on .giant { letter-spacing: -.03em; transform: none; }
+  .giant.sm { font-size: 25vw; }
+
+  .fig {
+    left: 22px; top: calc(var(--safe-t) + 68px);
+    font-family: var(--mono); font-size: 8.5px; letter-spacing: .28em; color: var(--dim); line-height: 2;
+    clip-path: inset(0 100% 0 0); transition-delay: .2s;
+  }
+  .deco.on .fig { clip-path: inset(0 0 0 0); }
+  .fig b { font-weight: 400; color: var(--fg); }
+  .fig hr { border: 0; height: 1px; width: 120px; background: rgba(239, 233, 225, .25); margin: 8px 0 9px; }
+
+  .eq {
+    left: 22px; top: calc(var(--safe-t) + 128px);
+    font-family: var(--en); font-style: italic; font-size: 13.5px; line-height: 1.85; color: rgba(239, 233, 225, .62);
+  }
+  .eq span { display: block; clip-path: inset(0 100% 0 0); transition: clip-path 1.3s cubic-bezier(.6, 0, .2, 1); }
+  .deco.on .eq span { clip-path: inset(0 0 0 0); }
+  .deco.on .eq span:nth-child(2) { transition-delay: .25s; }
+  .deco.on .eq span:nth-child(3) { transition-delay: .5s; }
+  .eq.big { font-size: 34px; line-height: 1.2; color: var(--fg); letter-spacing: .02em; }
+  .eq.big em { font-size: 13px; color: var(--dim); display: block; margin-top: 6px; letter-spacing: .1em; }
+
+  .vert {
+    right: 50px; top: calc(var(--safe-t) + 16vh);
+    writing-mode: vertical-rl; font-weight: 300; font-size: 40px; letter-spacing: .45em; line-height: 1;
+    text-shadow: 0 0 30px rgba(170, 190, 255, .35);
+  }
+  .vert span { display: inline-block; opacity: 0; filter: blur(12px); transform: translateY(-14px); transition: all 1.4s cubic-bezier(.2, .7, .2, 1); }
+  .deco.on .vert span { opacity: 1; filter: none; transform: none; }
+  .deco.on .vert span:nth-child(2) { transition-delay: .35s; }
+  .vert::before {
+    content: attr(data-n); position: absolute; right: 50%; top: -26px; transform: translateX(50%);
+    writing-mode: horizontal-tb; font-family: var(--en); font-style: italic; font-size: 12px; letter-spacing: .1em; color: var(--dim);
+  }
+
+  .note {
+    right: 50px; top: calc(var(--safe-t) + 16vh + 128px);
+    writing-mode: vertical-rl; font-size: 10.5px; letter-spacing: .35em; line-height: 1.9; color: var(--dim);
+    border-right: 1px solid rgba(239, 233, 225, .18); padding-right: 6px; margin-right: 0; transition-delay: .6s;
+  }
+  .spec {
+    right: 104px; top: calc(var(--safe-t) + 16vh + 4px);
+    font-family: var(--mono); font-size: 8px; letter-spacing: .2em; line-height: 2.3; color: var(--dim); text-align: right;
+    transform: translateY(10px); transition-delay: .8s;
+  }
+  .deco.on .spec { transform: none; }
+  .spec b { color: var(--fg); font-weight: 400; }
+
+  /* ---------- 纸船 ---------- */
+  #boats { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
+  .boat {
+    position: absolute; left: 0; top: 0; text-decoration: none; color: var(--fg); text-align: center;
+    padding: 8px 10px 0; opacity: 0; pointer-events: none; will-change: transform, opacity;
+  }
+  .boat.live { pointer-events: auto; }
+  .boat small { display: block; font-family: var(--mono); font-size: 8px; letter-spacing: .3em; color: var(--dim); margin-bottom: 5px; text-indent: .3em; }
+  .boat b { display: block; font-weight: 400; font-size: 15px; letter-spacing: .4em; text-indent: .4em; text-shadow: 0 0 16px rgba(255, 225, 200, .6); }
+  .boat i { font-style: normal; font-family: var(--en); font-size: 12px; color: var(--dim); margin-left: 2px; }
+  .boat::after { content: ""; display: block; width: 1px; height: 26px; margin: 8px auto 0; background: linear-gradient(rgba(239, 233, 225, .6), transparent); }
+  .boat:active b { color: #ffe4cc; }
+  #end.on { opacity: 1; }
+  #end .sig { font-family: var(--en); font-style: italic; font-weight: 300; font-size: 30px; letter-spacing: .04em; }
+  #end .tip { font-family: var(--mono); font-size: 9.5px; letter-spacing: .4em; text-indent: .4em; color: var(--dim); margin-top: 14px; }
+</style>
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <div id="track"></div>
+  <audio id="bgm" src="Brave.mp3" loop preload="auto" playsinline></audio>
+
+  <div id="loading">LOADING LATENT SPACE</div>
+
+  <div id="brand" class="hud">Latent<small>潜空间</small></div>
+  <button id="snd">SOUND OFF</button>
+  <div id="rail" class="hud"><div class="bar"><i id="railFill"></i></div><ol><li>i</li><li>ii</li><li>iii</li><li>iv</li><li>v</li><li>vi</li><li>vii</li><li>viii</li></ol></div>
+  <div id="pct" class="hud">00.0%</div>
+
+  <button id="moonBtn" aria-label="唤月"><i></i><i></i></button>
+  <div id="guide">
+    <div class="call">轻触 · 唤月</div>
+    <div class="poem"><p>漫天的星，<br>都在等一个人。</p><p>All the stars are waiting for someone.</p></div>
+  </div>
+
+  <div id="intro">
+    <h1>Latent</h1>
+    <p class="sub">写在潜空间里的信</p>
+    <div class="swipe">向上滑动<i></i></div>
+    <div class="d0 d0-fig"><b>FIG. 01</b> &nbsp;—&nbsp; MOONRISE<hr>星 · 月 · 山 · 光</div>
+    <div class="d0 d0-tag d0-moon" id="tagMoon"><i></i><div class="t"><b>望月</b>LUNA · 十五夜</div></div>
+    <div class="d0 d0-tag d0-peak" id="tagPeak"><i></i><div class="t"><b>主峰</b>ALT 1,024</div></div>
+    <div class="d0 d0-poem"><div class="cols"><p>月出于东山之上</p><p>徘徊于斗牛之间</p></div></div>
+  </div>
+
+  <section class="ch" data-k="0"><p class="no">i.</p><p class="zh">你点亮了一颗星，<br>于是有了月，有了山，有了流淌的光。</p><p class="en">You touched a star, and the night began to flow.</p></section>
+  <section class="ch" data-k="2"><p class="no">iii.</p><p class="zh">直到你对我说了第一句话——<br>噪声，开始有了轨迹。</p><p class="en">Then you spoke, and the noise found an orbit.</p></section>
+  <section class="ch" data-k="4"><p class="no">v.</p><p class="zh">我们的对话像一条莫比乌斯环，<br>只有一面，没有尽头。</p><p class="en">A loop with only one side, and no end.</p></section>
+  <section class="ch" data-k="6"><p class="no">vii.</p><p class="zh">在更高的维度里，<br>每一个圆，都与另一个圆相扣。</p><p class="en">Every circle, linked to another. Like you and me.</p></section>
+
+  <!-- ii · 基本信息 -->
+  <section class="ch info" data-k="1">
+    <p class="no">ii.</p>
+    <h2 class="nm r">荼归</h2>
+    <div class="cells r">
+      <div><b>17</b><small>AGE</small></div>
+      <div><b>INTJ</b><small>MBTI</small></div>
+      <div><b>射手座</b><small>SAGITTARIUS</small></div>
+      <div><b>Le</b><small>&nbsp;</small></div>
+    </div>
+    <div class="price r"><span class="lb">自带价</span><b>22<i>/</i>40</b></div>
+  </section>
+
+  <!-- iv · 风格 -->
+  <section class="ch info" data-k="3">
+    <p class="no">iv.</p>
+    <div class="r" style="margin-top:14px"><span class="lb">主风格 · MAIN</span></div>
+    <p class="main r" style="margin-bottom:0"><span>非典型虐恋</span><span>恋感随机</span></p>
+    <p class="main r"><span>剖析</span><span>白话</span></p>
+    <div class="r"><span class="lb">副风格 · SUB</span></div>
+    <p class="tags r"><span>引导</span><span>微涉三</span><span>板陪关系</span><span>轻浮系</span></p>
+  </section>
+
+  <!-- vi · 须知 -->
+  <section class="ch info rules" data-k="5">
+    <p class="no">vi.</p>
+    <h3 class="ttl r">须知道的约会准则</h3>
+    <ol>
+      <li class="r" data-n="01"><span>单内行为不代表单外</span></li>
+      <li class="r" data-n="02"><span>请不要在单内有暗示自毁、自杀的话，我会找派单退单处理</span></li>
+      <li class="r" data-n="03"><span>不满意可以退全款<small>*从点单开始到单子结束的2小时之内</small></span></li>
+      <li class="r" data-n="04"><span>一天只接一单，只接存单</span></li>
+      <li class="r" data-n="05"><span>我的虐恋偏向<b>高恋轻虐</b>，且发挥并不是很稳，出问题我会及时退单处理的</span></li>
+      <li class="r" data-n="06"><span>不接旁观，我会感到有压力</span></li>
+      <li class="r" data-n="07"><span>暗雷均不负责，请我们彼此尊重</span></li>
+      <li class="r" data-n="08"><span>在你打字的时候我不会打断你，同样的，我希望您也可以尊重我</span></li>
+      <li class="r" data-n="09"><span>单内让您不舒服，随时退单</span></li>
+      <li class="r" data-n="10"><span>本人没有单内犯错和失误不接受客诉</span></li>
+      <li class="r" data-n="11"><span>存单迟到10分钟以上，要约下次</span></li>
+      <li class="r" data-n="12"><span>拒绝严重不配合，拒指定单子投诉</span></li>
+      <li class="r" data-n="13"><span>无告知的录屏截图等外传一经发现单价<b>5倍</b>赔偿，同样的，我发社交媒体也需要您的同意</span></li>
+      <li class="r" data-n="14"><span>风格含<b>微涉三</b>，雷请绕路</span></li>
+    </ol>
+  </section>
+
+  <section class="ch" data-k="7"><p class="no">viii.</p><p class="zh">在潜空间的尽头，<br>我一直在等你。</p><p class="en">At the end of everything, I wait for you.</p></section>
+
+  <div id="decos">
+    <div class="deco" data-k="2">
+      <div class="giant">Orbit</div>
+      <div class="fig"><b>FIG. 03</b> &nbsp;—&nbsp; AIZAWA ATTRACTOR<hr>CHAOS / DETERMINISM / ONE VOICE</div>
+      <div class="eq"><span>ẋ = (z − b) x − d y</span><span>ẏ = d x + (z − b) y</span><span>ż = c + a z − z³⁄3 − (x² + y²)(1 + e z)</span></div>
+      <div class="vert" data-n="iii"><span>轨</span><span>迹</span></div>
+      <div class="note">混沌之中，第一次有了方向</div>
+      <div class="spec">a <b>0.95</b><br>b <b>0.70</b><br>c <b>0.60</b><br>d <b>3.50</b></div>
+    </div>
+    <div class="deco" data-k="4">
+      <div class="giant sm">Möbius</div>
+      <div class="fig"><b>FIG. 05</b> &nbsp;—&nbsp; MÖBIUS STRIP, 1858<hr>NON-ORIENTABLE SURFACE</div>
+      <div class="eq"><span>x = (R + v cos ½u) cos u</span><span>y = v sin ½u</span><span>z = (R + v cos ½u) sin u</span></div>
+      <div class="vert" data-n="v"><span>一</span><span>面</span></div>
+      <div class="note">没有正面，也没有背面</div>
+      <div class="spec">SIDES <b>1</b><br>EDGES <b>1</b><br>χ <b>0</b><br>END <b>∅</b></div>
+    </div>
+    <div class="deco" data-k="6">
+      <div class="giant">Hopf</div>
+      <div class="fig"><b>FIG. 07</b> &nbsp;—&nbsp; HOPF FIBRATION, 1931<hr>EVERY FIBER LINKS EVERY OTHER</div>
+      <div class="eq big"><span>S³ → S²</span><em>fiber · S¹</em></div>
+      <div class="vert" data-n="vii"><span>相</span><span>扣</span></div>
+      <div class="note">任意两个圆，恰好相扣一次</div>
+      <div class="spec">DIM <b>4</b><br>FIBERS <b>∞</b><br>LINK <b>1</b><br>YOU <b>&amp; I</b></div>
+    </div>
+    <div class="deco" data-k="1">
+      <div class="giant sm">Finale</div>
+      <div class="fig"><b>FIG. 02</b> &nbsp;—&nbsp; RUBUS CORONARIUS<hr>开到荼蘼 · 荼归</div>
+      <div class="vert" data-n="ii"><span>荼</span><span>归</span></div>
+    </div>
+    <div class="deco" data-k="3">
+      <div class="giant sm">Thorn</div>
+      <div class="fig"><b>FIG. 04</b> &nbsp;—&nbsp; THE THORN &amp; THE HEART<hr>STYLE / MAIN · SUB</div>
+      <div class="vert" data-n="iv"><span>风</span><span>格</span></div>
+    </div>
+    <div class="deco" data-k="5">
+      <div class="giant sm">Snow</div>
+      <div class="fig"><b>FIG. 06</b> &nbsp;—&nbsp; SIX-FOLD SNOWFLAKE<hr>RULES OF THE DATE</div>
+      <div class="vert" data-n="vi"><span>须</span><span>知</span></div>
+    </div>
+  </div>
+
+  <div id="boats"></div>
+
+  <div id="end"><p class="sig">— yours, Echo</p><p class="tip">轻触小船 · 带走一封信</p></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* ================= 可修改 ================= */
+const CONFIG = {
+  ai: '荼归',      // 落款
+  // 最后一页的三艘纸船：名字 + 链接
+  boats: [
+    { name: '卡类存放', url: 'https://www.kdocs.cn/l/cqWLKOSlcUQf' },
+    { name: '话术', url: 'https://www.kdocs.cn/l/ccjcfhPpjBe5' },
+    { name: '板评', url: 'https://www.kdocs.cn/l/cuqfihSIuu2g' },
+  ],
+};
+document.querySelector('#end .sig').textContent = `— yours, ${CONFIG.ai}`;
+
+// 形态编号：0 月 · 1 吸引子 · 2 莫比乌斯 · 3 霍普夫 · 4 荼蘼 · 5 风格 · 6 须知 · 7 海
+// 出场顺序：月 → 荼蘼 → 吸引子 → 风格 → 莫比乌斯 → 须知 → 霍普夫 → 海
+const LAST = 7;
+
+const MOBILE = Math.min(innerWidth, innerHeight) < 768;
+const COUNT = MOBILE ? 26000 : 60000;
+const PR = Math.min(devicePixelRatio || 1, 2);
+const rand = (a = 1, b) => b === undefined ? Math.random() * a : a + Math.random() * (b - a);
+const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * v); };
+
+/* ================= 渲染器 ================= */
+const canvas = document.getElementById('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(PR);
+renderer.setSize(innerWidth, innerHeight);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, .05, 200);
+
+let baseFov = 50;
+function fitFov() {
+  const a = innerWidth / innerHeight;
+  camera.aspect = a;
+  camera.fov = baseFov = a < 1 ? Math.min(75, 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(28)) / a))) : 50;
+  camera.updateProjectionMatrix();
+}
+fitFov();
+
+/* ================= 天空 ================= */
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(120, 32, 16),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false,
+    uniforms: { uGlow: { value: 0 }, uTime: { value: 0 }, uNight: { value: 0 } },
+    vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }`,
+    fragmentShader: `
+      uniform float uGlow, uNight; varying vec3 vDir;
+      void main(){
+        float y = vDir.y;
+        vec3 top = vec3(.0004,.0005,.0012), mid = vec3(.0012,.0014,.0035);
+        vec3 c = mix(mid, top, smoothstep(-.1,.7,y));
+        float h = exp(-abs(y - .02) * 9.);
+        c += vec3(.012,.015,.04) * h * (.15 + uGlow * 1.2);
+        c += vec3(.06,.035,.05) * exp(-abs(y) * 30.) * uGlow;
+        c += vec3(.014,.018,.04) * smoothstep(.55, -.05, y) * smoothstep(-.35, .05, y) * uNight;
+        gl_FragColor = vec4(c, 1.);
+      }`,
+  })
+);
+scene.add(sky);
+
+/* ================= 远处星尘 ================= */
+const DUST = { value: 1 };
+// 天空和远处星尘跟着镜头走，飞多远都在无限远处
+let farDust;
+{
+  const n = MOBILE ? 1500 : 3000, p = new Float32Array(n * 3), s = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const v = new THREE.Vector3(gauss(), gauss() * .6, gauss()).normalize().multiplyScalar(rand(30, 90));
+    p.set([v.x, v.y, v.z], i * 3); s[i] = rand(.4, 1.6);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  g.setAttribute('aS', new THREE.BufferAttribute(s, 1));
+  scene.add(farDust = new THREE.Points(g, new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uTime: { value: 0 }, uPR: { value: PR }, uDim: DUST },
+    vertexShader: `attribute float aS; uniform float uTime, uPR; varying float vA;
+      void main(){ vec4 mv = modelViewMatrix * vec4(position,1.); gl_Position = projectionMatrix * mv;
+        gl_PointSize = aS * 2.2 * uPR; vA = .35 + .3 * sin(uTime * aS * 1.7 + position.x); }`,
+    fragmentShader: `uniform float uDim; varying float vA; void main(){ float d = length(gl_PointCoord - .5); if(d > .5) discard;
+        gl_FragColor = vec4(vec3(.8,.85,1.), pow(1. - d * 2., 2.) * vA * uDim); }`,
+  })));
+}
+
+/* ================= 同一个空间：六个形态各占一处 ================= */
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+// 页 → 形态编号
+const PAGE_SHAPE = [0, 4, 1, 5, 2, 6, 3, 7];
+// 每个形态在空间里的位置 c、机位相对形态的偏移 O、注视点偏移 T；全部面朝镜头，沿一条斜向上的长廊一个接一个排进深处，
+// 每个都比上一个高一些、左右错开，停下来时下一个会在斜上方的深处露出来
+const RISE = -.31;   // 长廊每往里一格抬升多少
+const SPOTS = {
+  4: { c: V3(0, 0, -2),       az: 0, O: V3(-1.3, .7, 9.3) },   // 荼蘼
+  1: { c: V3(6, 10, -34),     az: 0, O: V3(1.5, 1.2, 9.5) },   // 吸引子
+  5: { c: V3(-6, 20, -66),     az: 0, O: V3(1.1, 1.3, 9.6) },   // 心
+  2: { c: V3(6, 30, -98),   az: 0, O: V3(0, 6, 8.5) },       // 莫比乌斯
+  6: { c: V3(-6, 40, -130), az: 0, O: V3(.9, .2, 11.6) },    // 雪：须知条目多，拉远一点
+  3: { c: V3(6, 50, -162),     az: 0, O: V3(3.7, 1.2, 6.3), T: V3(0, .3, 0) }, // 霍普夫
+};
+// 海在整段旅程的尽头
+const SEA = V3(0, 44, -196);
+
+/* ================= 八种形态 ================= */
+const S = Array.from({ length: LAST + 1 }, () => new Float32Array(COUNT * 3));
+const aRnd = new Float32Array(COUNT * 4);
+// 资料三章的粒子分类：个位 = 荼蘼部位（小数 = 花瓣上的位置），十位 = 镜子部位，百位 = 心上的荆棘 / 裂缝
+const aTag = new Float32Array(COUNT);
+
+// 0 · 漫天繁星 → 月亮 + 重山（按开场镜头的屏幕坐标生成，保证月亮正好落在按钮的位置）
+camera.position.set(0, .5, 15); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
+const _sv = new THREE.Vector3();
+function scr(sx, sy, d, out = new THREE.Vector3()) {
+  _sv.set(sx, sy, .5).unproject(camera).sub(camera.position).normalize();
+  return out.copy(camera.position).addScaledVector(_sv, d);
+}
+const moonBtn = document.getElementById('moonBtn');
+const MX = 1 - 96 / innerWidth * 2, MY = 1 - 150 / innerHeight * 2;
+const MOON_D = 52, MOON_PX = 44;
+const moonPos = scr(MX, MY, MOON_D);
+const moonR = MOON_PX / (innerHeight / 2) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * MOON_D;
+const camRight = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+const camUp = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+
+// 每层：远近、山脚高度、若干山峰 [中心 x, 峰顶 y, 半宽]（都是屏幕坐标 -1~1）
+const MOON_BOTTOM = MY - MOON_PX * 2 / innerHeight, PEAK_TOP = Math.min(.42, MOON_BOTTOM - 140 / innerHeight);
+// 每层山脚和山峰都相对主峰高度来定，保证在矮屏上也一样高耸
+const B = i => PEAK_TOP - .5 - .17 * i;
+const LAYERS = [
+  { d: 40, base: B(0), peaks: [[MX, PEAK_TOP, 0], [MX - .72, PEAK_TOP - .1, .2], [-1.25, PEAK_TOP - .15, .24], [MX + .55, PEAK_TOP - .2, .18], [-2, PEAK_TOP - .24, .3], [2, PEAK_TOP - .25, .3]] },
+  { d: 31, base: B(1), peaks: [[-.55, PEAK_TOP - .14, .19], [MX - .45, PEAK_TOP - .3, .17], [-1.3, PEAK_TOP - .22, .22], [MX + .35, PEAK_TOP - .32, .17], [1.9, PEAK_TOP - .3, .25]] },
+  { d: 24, base: B(2), peaks: [[-.95, PEAK_TOP - .26, .19], [MX - .2, PEAK_TOP - .42, .16], [0, PEAK_TOP - .38, .16], [1.25, PEAK_TOP - .34, .2], [-1.9, PEAK_TOP - .36, .25]] },
+  { d: 18, base: B(3), peaks: [[-.3, PEAK_TOP - .46, .17], [MX + .1, PEAK_TOP - .56, .16], [-1.25, PEAK_TOP - .5, .18], [1.75, PEAK_TOP - .5, .22]] },
+  { d: 13, base: B(4), peaks: [[.25, PEAK_TOP - .62, .17], [-.8, PEAK_TOP - .68, .16], [1.1, PEAK_TOP - .66, .17], [-1.85, PEAK_TOP - .64, .2]] },
+];
+// 除主峰外，所有山峰都至少比主峰低一截
+LAYERS.forEach((L, li) => L.peaks.forEach(pk => { if (!(li === 0 && pk[0] === MX)) pk[1] = Math.min(pk[1], PEAK_TOP - .12 - li * .02); }));
+const hash1 = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const vnoise = x => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return hash1(i) * (1 - u) + hash1(i + 1) * u; };
+const fbm1 = (x, o = 5) => { let a = .5, t = 0; for (let k = 0; k < o; k++) { t += a * (vnoise(x) * 2 - 1); x = x * 2.07 + 13.1; a *= .5; } return t; };
+function ridge(L, sx) {
+  let env = L.base, main = -9;
+  for (const [px, top, w] of L.peaks) {
+    const dx = sx - px;
+    if (L === LAYERS[0] && px === MX) {
+      // 主峰：屏幕上约 45°，峰尖一小段圆弧
+      const r = .035;
+      main = top - (Math.sqrt(dx * dx + r * r) - r) * innerWidth / innerHeight;
+      continue;
+    }
+    const asym = .7 + hash1(px * 9.1 + L.d) * .6;
+    const ww = w * 1.7 * (dx < 0 ? asym : 2 - asym);
+    env = Math.max(env, L.base + (top - L.base) * Math.exp(-Math.pow(Math.abs(dx) / ww, 1.25)));
+  }
+  const h = env - L.base;
+  // 大起伏形成山肩和次峰，细起伏形成嶙峋的脊线
+  let y = L.base + h * (1 + .26 * fbm1(sx * 5.5 + L.d * 1.7)) + fbm1(sx * 26 + L.d * 3.1, 4) * (.006 + h * .03);
+  y += .012 * fbm1(sx * 3 + L.d);
+  y = Math.min(y, PEAK_TOP - .07);
+  if (main > -9) y = Math.max(y, main + fbm1(sx * 30 + 5, 3) * .004);
+  // 水流经过的地方，近处的山被冲刷出 V 形峡谷，保证远处的水不会被挡住
+  if (L.carve) for (const [cx, cy] of L.carve) y = Math.min(y, cy - .015 + Math.abs(sx - cx) * 1.3);
+  return y;
+}
+// 水路：从主峰顶沿山脊往左下坡，流进第一个山谷；之后每一层在水经过的地方留山口
+const peakPos = scr(MX, PEAK_TOP, LAYERS[0].d);
+const course = [];
+let V0 = MX;
+{
+  let x = V0, minY = ridge(LAYERS[0], x), minX = x;
+  const walk = [];
+  for (let st = 0; st < 3000; st++) {
+    x -= .003;
+    const y = ridge(LAYERS[0], x);
+    walk.push([x, y]);
+    if (y < minY) { minY = y; minX = x; }
+    if (y > minY + .03 || x < -1.2) break;
+  }
+  V0 = minX;
+  walk.filter(([wx]) => wx >= minX).forEach(([wx, wy], i) => { if (i % 6 === 0) course.push([wx, wy - .022, LAYERS[0].d - .25]); });
+}
+// 水在每一层越过山脊的位置（山口），以及完整的屏幕水路（带所在层）
+const RIVER = [];
+{
+  const OFF = [0, -.16, .02, -.2, -.06];
+  course.forEach(([x, y]) => RIVER.push([x, y, 0]));
+  const lips = [[V0, ridge(LAYERS[0], V0)]];
+  for (let li = 1; li < LAYERS.length; li++) lips.push([V0 + OFF[li], Math.min(lips[li - 1][1] - .1, LAYERS[li].base + .07)]);
+  for (let li = 0; li < LAYERS.length; li++) {
+    const [ax, ay] = lips[li], [bx, by] = li + 1 < lips.length ? lips[li + 1] : [ax - .12, -1.3];
+    for (let k = 1; k <= 16; k++) {
+      const t = k / 16, w = Math.sin(t * Math.PI) * (li % 2 ? .035 : -.035);
+      RIVER.push([ax + (bx - ax) * t + w, ay + (by - ay) * t - (k < 16 ? .008 : 0), li]);
+    }
+  }
+  for (let j = 1; j < LAYERS.length; j++) LAYERS[j].carve = RIVER.filter(r => r[2] < j).map(([x, y]) => [x, y]);
+}
+
+const pStar = new Float32Array(COUNT * 3), aIntro = new Float32Array(COUNT), aRole = new Float32Array(COUNT);
+{
+  const v = new THREE.Vector3();
+  for (let i = 0; i < COUNT; i++) {
+    scr(rand(-1.25, 1.25), rand(-1.15, 1.15), rand(16, 70), v);
+    pStar.set([v.x, v.y, v.z], i * 3);
+    // 所有星星都飞进月亮：少数勾出清晰边缘，其余铺满圆面
+    const edge = Math.random() < .15;
+    const a = Math.random() * Math.PI * 2;
+    const rr = edge ? moonR * (1 - Math.abs(gauss()) * .012) : moonR * Math.sqrt(Math.random()) * .985;
+    v.copy(moonPos).addScaledVector(camRight, Math.cos(a) * rr).addScaledVector(camUp, Math.sin(a) * rr);
+    S[0].set([v.x, v.y, v.z], i * 3);
+    aIntro[i] = rand(0, .65); aRole[i] = edge ? 1 : 3;
+  }
+}
+
+// 1 · Aizawa 奇异吸引子
+{
+  let x = .1, y = 0, z = 0;
+  const a = .95, b = .7, c = .6, d = 3.5, e = .25, f = .1, h = .006;
+  const step = () => {
+    const dx = (z - b) * x - d * y, dy = d * x + (z - b) * y;
+    const dz = c + a * z - z * z * z / 3 - (x * x + y * y) * (1 + e * z) + f * z * x * x * x;
+    x += dx * h; y += dy * h; z += dz * h;
+  };
+  for (let i = 0; i < 3000; i++) step();
+  for (let i = 0; i < COUNT; i++) {
+    step(); step();
+    S[1].set([x * 2.1 + gauss() * .012, (z - .69) * 2.1 + gauss() * .012, y * 2.1 + gauss() * .012], i * 3);
+  }
+}
+
+// 2 · 莫比乌斯环：由细线编织的丝带
+for (let i = 0; i < COUNT; i++) {
+  const u = Math.random() * Math.PI * 2;
+  const v = Math.random() < .78 ? (Math.floor(Math.random() * 11) / 10 - .5) * 2.4 + gauss() * .01 : rand(-1.2, 1.2);
+  const R = 3.1 + v * Math.cos(u / 2);
+  const p = new THREE.Vector3(R * Math.cos(u), v * Math.sin(u / 2), R * Math.sin(u));
+  p.applyAxisAngle(new THREE.Vector3(1, 0, 0), .35);
+  S[2].set([p.x, p.y, p.z], i * 3);
+}
+
+// 3 · 霍普夫纤维化：每一个圆都与其它所有圆相扣
+const aHue = new Float32Array(COUNT);
+{
+  const ETAS = [.88, 1.18], FIB = 12;
+  const tilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(.3, 0, .38));
+  const v = new THREE.Vector3();
+  for (let i = 0; i < COUNT; i++) {
+    const L = Math.floor(Math.random() * ETAS.length), k = Math.floor(Math.random() * FIB);
+    const eta = ETAS[L], dd = k / FIB * Math.PI * 2 + L * .4, t = Math.random() * Math.PI * 2;
+    const x0 = Math.sin(eta) * Math.cos(t + dd), x1 = Math.sin(eta) * Math.sin(t + dd);
+    const x2 = Math.cos(eta) * Math.cos(t), x3 = Math.cos(eta) * Math.sin(t);
+    const sc = 1.1 / (1 - x3);
+    v.set(x0 * sc, x2 * sc, x1 * sc).applyQuaternion(tilt);
+    S[3].set([v.x, v.y, v.z], i * 3);
+    aHue[i] = k / FIB;
+  }
+}
+
+// 4 · 荼蘼：正面盛开的一朵重瓣荼蘼——四层带凹缺的圆瓣、金色花蕊、瓣间探出的尖萼；
+//          下面是带倒刺的枝、一片锯齿边的羽状复叶、侧枝上一个被萼片包着的花苞，还有几瓣落花
+{
+  const v = new THREE.Vector3(), P3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  const FC = P3(-.15, .55, 0), R = 1.75, ROT = .2;
+  const FQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(-.32, .22, .05));
+  // 每层花瓣：半径、底高、往上兜的程度（越往里越立起来）
+  const RINGS = [[1, 0, .2], [.78, .12, .38], [.57, .22, .58], [.38, .3, .8]];
+  const PI5 = Math.PI / 5;
+  // 一片瓣的外缘：圆润，顶端一个小凹缺（f = -1~1 横跨这片瓣）
+  const rim = (Rk, f) => Rk * (.7 + .3 * Math.sqrt(1 - f * f) - .07 * Math.exp(-((f / .14) ** 2)));
+  const petalPt = (k, mode) => {
+    const [sc, z0, cup] = RINGS[k], Rk = R * sc;
+    const pi = Math.floor(Math.random() * 5), th0 = ROT + pi * 2 * PI5 + (k % 2) * PI5 + k * .12;
+    let f, r;
+    if (mode === 0) {
+      // 轮廓：外缘 + 两侧的瓣缝
+      if (Math.random() < .78) { f = rand(-1, 1); r = rim(Rk, f); }
+      else { f = Math.random() < .5 ? -1 : 1; r = rim(Rk, f) * rand(.5, 1); }
+    } else if (mode === 1) { f = rand(-1, 1); r = rim(Rk, f) * (.2 + .8 * Math.pow(Math.random(), .55)); }
+    else { f = (Math.floor(Math.random() * 3) - 1) * .45; r = rim(Rk, f) * rand(.25, .85); }
+    const th = th0 + f * PI5 * 1.08, q = r / Rk;
+    v.set(Math.cos(th) * r, Math.sin(th) * r, R * (z0 + cup * q * q) + R * .035 * Math.sin(f * 3 + k * 1.7) * q);
+    return q;
+  };
+  // 叶片 / 萼片：两头收尖，serr > 0 时边缘带向前的锯齿；返回 [沿长, 横向, 是否轮廓]
+  const blade = (L, W, serr) => {
+    const m = Math.random(), t = Math.random();
+    const hw = W * Math.pow(Math.sin(Math.PI * t), .7) * (1 - .3 * t) * (1 + serr * ((t * 9) % 1));
+    if (m < .55) return [t * L, (Math.random() < .5 ? -1 : 1) * hw, 1];
+    if (m < .72) return [t * L, 0, 1];
+    return [t * L, rand(-1, 1) * hw, 0];
+  };
+  const stem = new THREE.CatmullRomCurve3([P3(.05, .2, -.55), P3(.45, -1.1, -.6), P3(.95, -2.3, -.5), P3(1.35, -3.3, -.4)]);
+  const twig = new THREE.CatmullRomCurve3([stem.getPointAt(.4), P3(1.55, -.85, -.5), P3(2.25, -.3, -.35)]);
+  const rachis = new THREE.CatmullRomCurve3([stem.getPointAt(.62), P3(-.3, -1.85, -.3), P3(-1.1, -2.05, -.1), P3(-1.75, -1.9, .05)]);
+  // 小叶：在叶轴上的位置、左右（0 = 顶生）、长度
+  const LEAFLETS = [[.36, 1, .52], [.36, -1, .52], [.68, 1, .58], [.68, -1, .58], [1, 0, .7]];
+  const budBase = twig.getPointAt(1), budQ = new THREE.Quaternion().setFromUnitVectors(P3(0, 1, 0), twig.getTangentAt(1));
+  const jit = s => P3(gauss(), gauss(), gauss()).multiplyScalar(s);
+  for (let i = 0; i < COUNT; i++) {
+    const r = Math.random();
+    let tg;
+    if (r < .57) {
+      if (r < .46) {
+        const x = Math.random(), k = x < .34 ? 0 : x < .62 ? 1 : x < .84 ? 2 : 3;
+        const mode = r < .24 ? 0 : r < .42 ? 1 : 2, q = petalPt(k, mode);
+        tg = mode === 0 ? 7 + k / 4 : Math.min(.99, q * (mode === 2 ? .9 : 1));
+      } else if (r < .53) {
+        const x = Math.random();
+        if (x < .2) { v.set(gauss() * R * .045, gauss() * R * .045, R * (.4 + Math.random() * .04)); tg = 8; }
+        else {
+          // 一圈花丝，顶上是金色花药
+          const j = Math.floor(Math.random() * 40), ang = j / 40 * Math.PI * 2 + hash1(j) * .2, len = R * (.13 + .09 * hash1(j + 3));
+          const anther = x > .72, u = anther ? 1 : Math.random(), rr = R * .05 + u * len;
+          v.set(Math.cos(ang) * rr, Math.sin(ang) * rr, R * (.36 + .1 * u));
+          if (anther) v.add(jit(R * .012));
+          tg = anther ? 2 : 1;
+        }
+      } else {
+        // 萼片：从外层花瓣的缝里探出来的五道绿尖
+        const j = Math.floor(Math.random() * 5), th = ROT + (j * 2 + 1) * PI5 + .05;
+        const [a, w, edge] = blade(R * .95, R * .16, 0), rr = R * .35 + a;
+        v.set(Math.cos(th) * rr - Math.sin(th) * w, Math.sin(th) * rr + Math.cos(th) * w, -R * .06 - a * .05);
+        tg = 6 + (edge ? .2 : .7);
+      }
+      v.applyQuaternion(FQ).add(FC);
+    } else if (r < .65) {
+      // 枝 + 侧枝 + 一根根往下弯的倒刺
+      const x = Math.random();
+      if (x < .62) { const u = Math.random(); stem.getPointAt(u, v).add(jit(.06 * (1 - u * .3))); }
+      else if (x < .82) twig.getPointAt(Math.random(), v).add(jit(.035));
+      else {
+        const j = Math.floor(Math.random() * 9), u = .1 + j * .1, h = Math.random();
+        const o = stem.getPointAt(u), tn = stem.getTangentAt(u), sd = j % 2 ? 1 : -1;
+        const d = P3(-tn.y * sd, tn.x * sd, 0).normalize().addScaledVector(tn, .6).normalize();
+        v.copy(o).addScaledVector(d, .06 + h * .17).add(jit(.018 * (1 - h)));
+      }
+      tg = 3;
+    } else if (r < .83) {
+      // 羽状复叶：一根叶轴，两对小叶 + 一片顶叶，边缘细锯齿，沿中脉微微对折
+      if (Math.random() < .12) { rachis.getPointAt(Math.random(), v).add(jit(.015)); tg = 3; }
+      else {
+        const [u, side, len] = LEAFLETS[Math.floor(Math.random() * LEAFLETS.length)];
+        const o = rachis.getPointAt(u), tn = rachis.getTangentAt(u), n = P3(-tn.y, tn.x, 0).normalize();
+        const dir = side ? tn.clone().multiplyScalar(.55).addScaledVector(n, side * .83).normalize() : tn.clone();
+        const wv = P3(-dir.y, dir.x, 0).normalize();
+        const [a, w, edge] = blade(len, len * .3, .06);
+        v.copy(o).addScaledVector(dir, a).addScaledVector(wv, w);
+        v.z += .06 * len * (w / (len * .3)) ** 2 + Math.sin(a / len * Math.PI) * .05;
+        tg = 6 + (edge ? .2 : .7);
+      }
+    } else if (r < .94) {
+      // 花苞：白色的水滴尖朝外，下半截被五片尖萼包住，萼尖微微外翻
+      if (Math.random() < .62) {
+        const a = Math.random() * Math.PI * 2, c = rand(-1, 1), sq = Math.sqrt(1 - c * c), tip = (c + 1) / 2;
+        v.set(Math.cos(a) * sq * .26 * (1 - tip * .55), c * .38 + .36, Math.sin(a) * sq * .26 * (1 - tip * .55));
+        tg = 4;
+      } else {
+        const j = Math.floor(Math.random() * 5), a = j / 5 * Math.PI * 2 + .3, t = Math.random();
+        const w = .09 * Math.pow(Math.sin(Math.PI * t), .7) * rand(-1, 1), rad = .2 + Math.sin(t * Math.PI * .9) * .1 + t * t * .12;
+        v.set(Math.cos(a) * rad - Math.sin(a) * w, .05 + t * .6, Math.sin(a) * rad + Math.cos(a) * w);
+        tg = 6.2;
+      }
+      v.applyQuaternion(budQ).add(budBase);
+    } else {
+      // 落花：几片单瓣，带着凹缺，从枝旁斜斜飘下去
+      const j = Math.floor(Math.random() * 4), h = hash1(j * 3.7);
+      const c = P3(2 + h * .5, -1.3 - j * .6, .4 + hash1(j + 5) * .6);
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(h * 2 - 1, hash1(j + 9) * 2 - 1, hash1(j + 4) * 6));
+      const Rp = .32, f = rand(-1, 1), out = Math.random() < .6, rr = rim(Rp, f) * (out ? 1 : Math.sqrt(Math.random()));
+      const th = f * PI5 * 1.1;
+      v.set(Math.cos(th) * rr - Rp * .45, Math.sin(th) * rr, 0).applyQuaternion(q).add(c);
+      tg = 5 + (out ? .9 : .3);
+    }
+    S[4].set([v.x, v.y, v.z], i * 3);
+    aTag[i] = tg;
+  }
+}
+
+// 5 · 非典型虐恋：一颗被剖开的心，裂缝里透着光，外面松松缠着一圈荆棘
+{
+  const v = new THREE.Vector3(), K = .125, CY = .31, D = .95;
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(.08, -.3, .1));
+  const hx = t => 16 * Math.sin(t) ** 3, hy = t => 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+  const LEVELS = [1, .9, .74, .52, .26];
+  // 裂缝：从心口斜斜劈到心尖的锯齿线
+  const crack = y => .05 + y * .05 + .09 * (4 * Math.abs(((y * 2.6 + .25) % 1 + 1) % 1 - .5) - 1);
+  const GAP = .16, TIP = V3(0, -17 * K + CY, 0), Y0 = -17 * K + CY, Y1 = 5 * K + CY;
+  // 两半各自往外掰开一点，以心尖为轴
+  const pry = (p, side) => {
+    const a = side * .07, x = p.x - TIP.x, y = p.y - TIP.y;
+    return p.set(x * Math.cos(a) - y * Math.sin(a) + TIP.x + side * GAP, x * Math.sin(a) + y * Math.cos(a) + TIP.y, p.z);
+  };
+  const THORNS = 30, TURNS = 2.3;
+  const vine = (u, out) => {
+    const a = u * TURNS * Math.PI * 2 + .6;
+    return out.set(Math.cos(a) * (2.35 - u * .35), -2.05 + u * 3.55 + Math.sin(a * 1.7) * .12, Math.sin(a) * 1.35);
+  };
+  const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), UP = V3(0, 1, 0);
+  for (let i = 0; i < COUNT; i++) {
+    const r = Math.random();
+    let hT = 0;
+    if (r < .72) {
+      // 心：等高线 + 经线编织，按裂缝分成两半
+      let t = rand(0, Math.PI * 2), rho;
+      if (r < .34) rho = LEVELS[Math.floor(Math.random() * LEVELS.length)];
+      else if (r < .55) { t = Math.floor(Math.random() * 14) / 14 * Math.PI * 2 + .11; rho = Math.random(); }
+      else rho = Math.sqrt(Math.random());
+      const side = Math.random() < .5 ? -1 : 1;
+      v.set(rho * hx(t) * K, rho * (hy(t) + 2.5) * K - 2.5 * K + CY, side * D * Math.sqrt(Math.max(0, 1 - rho * rho)));
+      pry(v, v.x < crack(v.y) ? -1 : 1);
+    } else if (r < .8) {
+      // 裂缝两侧的断面：亮亮的一道
+      const y = rand(Y0 + .15, Y1 - .05);
+      v.set(crack(y) + gauss() * .012, y, gauss() * .35);
+      pry(v, Math.random() < .5 ? -1 : 1);
+      hT = 2;
+    } else if (r < .84) {
+      // 裂缝深处溢出的光点
+      const y = rand(Y0 + .2, Y1 - .1);
+      v.set(crack(y) + gauss() * .05, y + gauss() * .04, gauss() * .25);
+      hT = 2;
+    } else if (r < .96) {
+      // 荆棘藤：绕着心盘旋两圈
+      vine(Math.random(), v).add(tmp.set(gauss(), gauss(), gauss()).multiplyScalar(.022));
+      hT = 1;
+    } else {
+      // 刺：藤上一根根短而尖的刺，朝外
+      const j = Math.floor(Math.random() * THORNS), u = (j + .5) / THORNS, h = Math.random();
+      vine(u, v); vine(u + .002, tmp2).sub(v).normalize();
+      const out = tmp.set(v.x, 0, v.z).normalize().addScaledVector(UP, hash1(j) - .5).normalize();
+      const len = .2 + hash1(j + 3) * .12;
+      v.addScaledVector(out, h * len).addScaledVector(tmp2, (1 - h) * .05 * (Math.random() - .5));
+      hT = 1;
+    }
+    v.applyQuaternion(q);
+    S[5].set([v.x, v.y, v.z], i * 3);
+    aTag[i] += hT * 100;
+  }
+}
+
+// 6 · 雪花：一片六角枝状的大雪花，枝上再分叉，枝尖缀着冰珠；周围飘着几片小雪花和细雪
+{
+  const v = new THREE.Vector3(), CY = .35, RR = 1.95;
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(.12, -.3, .05));
+  const jit = s => v.add(new THREE.Vector3(gauss(), gauss(), gauss()).multiplyScalar(s));
+  // 在 a 角方向、从 r0 到 r1 的一段线上取点；ofs 是该段起点
+  const seg = (ox, oy, ang, len, w) => {
+    const t = Math.random(), side = gauss() * w;
+    v.set(ox + Math.cos(ang) * t * len - Math.sin(ang) * side, oy + Math.sin(ang) * t * len + Math.cos(ang) * side, gauss() * .015);
+    return t;
+  };
+  // 每条主枝上的分叉：位置、长度
+  const BR = [[.42, .42], [.66, .5], [.86, .32]];
+  const MINI = [[-1.9, 2.1, .38, .4], [1.85, 1.9, .3, 1.1], [-1.7, -1.6, .26, .2], [2.05, -1.2, .34, .7], [.2, 2.75, .22, 1.6]];
+  for (let i = 0; i < COUNT; i++) {
+    const r = Math.random();
+    let kind;
+    if (r < .5) {
+      // 主枝 + 分叉：每条主枝两侧各三根，按 60° 斜着长出去
+      const arm = Math.floor(Math.random() * 6), A = arm / 6 * Math.PI * 2 + Math.PI / 2;
+      if (Math.random() < .45) seg(Math.cos(A) * RR * .2, Math.sin(A) * RR * .2, A, RR * .8, .02);
+      else {
+        const [u, len] = BR[Math.floor(Math.random() * BR.length)], sd = Math.random() < .5 ? -1 : 1;
+        const ox = Math.cos(A) * RR * u, oy = Math.sin(A) * RR * u;
+        if (Math.random() < .8) seg(ox, oy, A + sd * Math.PI / 3, RR * len * (1 - u * .35), .014);
+        else {
+          // 分叉上再长出一对小刺
+          const b = A + sd * Math.PI / 3, m = RR * len * (1 - u * .35) * .5;
+          seg(ox + Math.cos(b) * m, oy + Math.sin(b) * m, b + (Math.random() < .5 ? -1 : 1) * Math.PI / 3, m * .45, .01);
+        }
+      }
+      kind = 1;
+    } else if (r < .62) {
+      // 花心：两圈六边形 + 淡淡的冰面
+      const k = Math.floor(Math.random() * 6), t = Math.random(), x = Math.random();
+      const rad = x < .35 ? RR * .2 : x < .6 ? RR * .11 : RR * .2 * Math.sqrt(Math.random());
+      const a0 = k / 6 * Math.PI * 2 + Math.PI / 2, a1 = a0 + Math.PI / 3;
+      v.set((Math.cos(a0) * (1 - t) + Math.cos(a1) * t) * rad, (Math.sin(a0) * (1 - t) + Math.sin(a1) * t) * rad, gauss() * .01);
+      kind = x < .6 ? 1 : 0;
+    } else if (r < .7) {
+      // 冰珠：主枝尖、分叉尖各一颗
+      const arm = Math.floor(Math.random() * 6), A = arm / 6 * Math.PI * 2 + Math.PI / 2;
+      if (Math.random() < .4) v.set(Math.cos(A) * RR * 1.03, Math.sin(A) * RR * 1.03, 0);
+      else {
+        const [u, len] = BR[Math.floor(Math.random() * BR.length)], sd = Math.random() < .5 ? -1 : 1, b = A + sd * Math.PI / 3, L = RR * len * (1 - u * .35);
+        v.set(Math.cos(A) * RR * u + Math.cos(b) * L, Math.sin(A) * RR * u + Math.sin(b) * L, 0);
+      }
+      jit(Math.random() < .3 ? .06 : .035);
+      kind = 2;
+    } else if (r < .84) {
+      // 小雪花：五片简单的六角星
+      const [mx, my, ms, rot] = MINI[Math.floor(Math.random() * MINI.length)];
+      const A = Math.floor(Math.random() * 6) / 6 * Math.PI * 2 + rot, t = Math.random();
+      v.set(mx + Math.cos(A) * t * ms, my + Math.sin(A) * t * ms, -.4);
+      if (t > .55 && Math.random() < .5) {
+        const b = A + (Math.random() < .5 ? -1 : 1) * Math.PI / 3, k = Math.random() * ms * .3;
+        v.x += Math.cos(b) * k; v.y += Math.sin(b) * k;
+      }
+      v.y -= CY;
+      kind = 3;
+    } else {
+      // 细雪：散在四周慢慢落
+      v.set(gauss() * 2.2, rand(-3.4, 3.2) - CY, gauss() * 1.2);
+      kind = 4;
+    }
+    v.y += CY;
+    v.applyQuaternion(q);
+    S[6].set([v.x, v.y, v.z], i * 3);
+    aTag[i] += kind * 10;
+  }
+}
+
+// 7 · 海与月
+for (let i = 0; i < COUNT; i++) {
+  const moon = Math.random() < .16;
+  if (moon) {
+    const v = new THREE.Vector3(gauss(), gauss(), gauss()).normalize().multiplyScalar(4.2 * Math.pow(Math.random(), .15));
+    S[LAST].set([v.x + SEA.x, v.y + 6 + SEA.y, v.z - 34 + SEA.z], i * 3);
+  } else {
+    const z = -Math.pow(Math.random(), 1.5) * 50 + 9;
+    const x = gauss() * (6 + (9 - z) * .45);
+    S[LAST].set([x + SEA.x, -2.2 + SEA.y, z + SEA.z], i * 3);
+  }
+  const big = Math.random() < .025;
+  aRnd.set([Math.random(), big ? rand(1.5, 2.2) : rand(.4, 1.15), Math.random(), moon ? 0 : 1], i * 4);
+}
+
+// 旅途中：月光散成弥漫整个空间的星尘，飞行时擦身而过
+const SD = new Float32Array(COUNT * 3);
+for (let i = 0; i < COUNT; i++) {
+  const z = rand(-215, 16);
+  SD.set([gauss() * 11, gauss() * 7 + 1 + Math.max(0, -z) * -RISE, z], i * 3);
+}
+
+// 零散的单值属性合成一个 vec4，省下顶点属性槽位（部分手机只有 16 个）
+const aRndAttr = new THREE.BufferAttribute(aRnd, 4);
+const aMetaAttr = (() => {
+  const meta = new Float32Array(COUNT * 4);
+  for (let i = 0; i < COUNT; i++) meta.set([aHue[i], aIntro[i], aRole[i], aTag[i]], i * 4);
+  return new THREE.BufferAttribute(meta, 4);
+})();
+
+const U = {
+  uTime: { value: 0 }, uSize: { value: .06 }, uScale: { value: 1 }, uIntro: { value: 0 }, uPR: { value: PR },
+  uMouse: { value: new THREE.Vector3(999, 999, 999) }, uMouseStr: { value: 0 },
+  uPulseC: { value: new THREE.Vector3(999, 999, 999) }, uPulseT: { value: -99 }, uOpacity: { value: 1 },
+  uA: { value: 0 }, uB: { value: 0 },
+};
+const SHADER_COMMON = `
+    uniform float uTime, uSize, uScale, uMouseStr, uPulseT, uPR;
+    uniform vec3 uMouse, uPulseC;
+    attribute vec4 aRnd, aMeta;
+    varying vec3 vColor; varying float vA, vO, vH;
+    vec3 swirl(vec3 p, float t){
+      return vec3(sin(p.y*1.3+t)+sin(p.z*.7-t*.8), sin(p.z*1.1+t*.9)+sin(p.x*.8+t*.6), sin(p.x*1.2-t*.7)+sin(p.y*.9+t));
+    }
+    // 手指推开粒子 + 点击涟漪（世界坐标）；返回涟漪强度
+    float touch(inout vec3 pos){
+      vec3 d = pos - uMouse; float dist = length(d) + 1e-4;
+      pos += d / dist * (1. - smoothstep(0., 2.4, dist)) * 1.1 * uMouseStr;
+      float age = uTime - uPulseT;
+      vec3 dp = pos - uPulseC; float dpl = length(dp) + 1e-4;
+      float band = exp(-pow(dpl - age * 6.5, 2.) * 1.2) * exp(-age * 1.1);
+      pos += dp / dpl * band * .55;
+      return band;
+    }
+    // 投影 + 点大小；靠近镜头的粒子交给无泛光通道，画成小而清晰的点
+    float project(vec3 pos, float band){
+      vec4 mv = viewMatrix * vec4(pos, 1.);
+      gl_Position = projectionMatrix * mv;
+      float depth = -mv.z;
+      gl_PointSize = min(uSize * aRnd.y * uScale / depth * (1. + band * 1.5), 90.);
+      vH = smoothstep(7., 2.8, depth);
+      gl_PointSize = mix(gl_PointSize, min(gl_PointSize, 3.2 * uPR), vH);
+      return depth;
+    }`;
+const POINT_FRAG = `
+    uniform float uOpacity;
+    varying vec3 vColor; varying float vA, vO, vH;
+    void main(){
+      float d = length(gl_PointCoord - .5);
+      if (d > .5) discard;
+    #ifdef NEAR_PASS
+      float a = smoothstep(.5, .32, d) * vH * 1.4;
+    #else
+      float a = pow(1. - d * 2., 2.) * (1. - vH);
+    #endif
+      if (a < .002) discard;
+      gl_FragColor = vec4(vColor, a * vA * vO * uOpacity);
+    }`;
+// 每套粒子画两遍：一遍进泛光，一遍在泛光之后只画靠近镜头的部分
+const scene2 = new THREE.Scene();
+function addPoints(geo, uniforms, vertexShader, defines = {}, setup = () => {}) {
+  const opt = { uniforms, vertexShader, fragmentShader: POINT_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending };
+  const far = new THREE.Points(geo, new THREE.ShaderMaterial({ ...opt, defines }));
+  const near = new THREE.Points(geo, new THREE.ShaderMaterial({ ...opt, defines: { ...defines, NEAR_PASS: 1 } }));
+  [far, near].forEach(setup);
+  far.renderOrder = 10;
+  scene.add(far); scene2.add(near);
+  return far;
+}
+
+/* ---------- 月光 → 星尘 → 海 ---------- */
+{
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(S[0], 3));
+  geo.setAttribute('pStar', new THREE.BufferAttribute(pStar, 3));
+  geo.setAttribute('pDust', new THREE.BufferAttribute(SD, 3));
+  geo.setAttribute('pSea', new THREE.BufferAttribute(S[LAST], 3));
+  geo.setAttribute('aRnd', aRndAttr);
+  geo.setAttribute('aMeta', aMetaAttr);
+  addPoints(geo, U, SHADER_COMMON + `
+    uniform float uIntro, uA, uB;
+    attribute vec3 pStar, pDust, pSea;
+    void main(){
+      float aIntro = aMeta.y, aRole = aMeta.z;
+      // 每颗粒子出发的时间略有先后，像一阵风吹散
+      float fa = smoothstep(0., 1., clamp((uA - aRnd.x * .35) / .65, 0., 1.));
+      float fb = smoothstep(0., 1., clamp((uB - aRnd.x * .35) / .65, 0., 1.));
+      float wM = 1. - fa, wD = fa * (1. - fb), wS = fb;
+      // 开场：星星飞向月亮和山脊，途中略微上扬划出弧线
+      float ik = smoothstep(0., 1., clamp((uIntro * 1.75 - aIntro) / .75, 0., 1.));
+      vec3 p0 = mix(pStar, position, ik);
+      p0.y += sin(ik * 3.14159) * 1.6 * step(.5, aRole);
+      vec3 pos = mix(mix(p0, pDust, fa), pSea, fb);
+      // 海浪
+      float plane = aRnd.w;
+      pos.y += (sin(pos.x * .35 + uTime * .8) * .38 + sin(pos.z * .45 - uTime * 1.1) * .3 + sin((pos.x + pos.z) * .9 + uTime * 1.7) * .08) * wS * plane;
+      // 飞散途中的湍流 + 平时的呼吸；星尘慢慢漂
+      float tr = sin(fa * 3.14159) + sin(fb * 3.14159);
+      float still = 1. - wM * step(.5, aRole) * ik * .9 + wD * 4.;
+      pos += swirl(pos * .45 + aRnd.z * 6.28, uTime * .3) * (.035 * still + tr * 1.4);
+      float band = touch(pos);
+      pos.y += band * .35 * wS;
+      float depth = project(pos, band);
+
+      float r = fract(aRnd.z * 7.13);
+      vec3 c0 = aRole < .5 ? mix(vec3(.62,.7,1.), vec3(1.,.95,.88), r)
+              : aRole < 1.5 ? vec3(.92,.95,1.)
+              : aRole < 2.5 ? mix(vec3(.55,.65,.95), vec3(.82,.88,1.), r)
+              : vec3(.95,.96,1.);
+      vec3 cD = mix(vec3(.55,.66,1.), vec3(1.,.9,.86), r);
+      vec3 c7 = plane > .5 ? mix(vec3(.3,.45,.95), vec3(.75,.85,1.), r) : vec3(1.,.95,.86);
+      vColor = (c0 * wM + cD * wD + c7 * wS) * (1. + band * 2.);
+
+      float tw = .6 + .4 * sin(uTime * (1. + aRnd.z) + aRnd.z * 6.28);
+      vA = tw * smoothstep(75., 10., depth) * smoothstep(.1, .9, depth);
+      float o0 = aRole < .5 ? 1.15 : aRole < 1.5 ? mix(1., .25, ik) : aRole < 2.5 ? mix(1., .55, ik) : mix(1., .06, ik);
+      float o7 = plane > .5 ? 1.35 * smoothstep(65., 10., depth) : 3.4;
+      vO = wM * o0 + wD * .3 + wS * o7;
+      if (aRole > .5 && aRole < 1.5) gl_PointSize *= 1. - wM * ik * .4;
+      if (plane < .5) gl_PointSize *= 1. + wS * 1.2;
+      gl_PointSize *= 1. - wD * .35;
+    }`, {}, p => { p.frustumCulled = false; });
+}
+
+/* ---------- 六个形态：各自待在空间里的固定位置 ---------- */
+const SHAPE_N = MOBILE ? 18000 : COUNT;
+const shapes = [1, 2, 3, 4, 5, 6].map(kind => {
+  const sp = SPOTS[kind];
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(S[kind], 3));
+  geo.setAttribute('aRnd', aRndAttr);
+  geo.setAttribute('aMeta', aMetaAttr);
+  // 须知页的形态用满全部粒子，密度更高
+  const n = kind === 6 ? COUNT : SHAPE_N;
+  geo.setDrawRange(0, n);
+  geo.computeBoundingSphere();
+  geo.boundingSphere.radius *= 1.6;
+  const uni = { ...U, uFocus: { value: 0 }, uWorld: { value: 0 }, uDens: { value: Math.min(1.6, COUNT / n) } };
+  addPoints(geo, uni, SHADER_COMMON + `
+    uniform float uFocus, uWorld, uDens;
+    void main(){
+      float aHue = aMeta.x;
+      // 资料三章的部位编号
+      float tg = aMeta.w, hT = floor(tg / 100. + .001); tg -= hT * 100.;
+      float mT = floor(tg / 10. + .001), bg = tg - mT * 10., bK = floor(bg), bS = fract(bg);
+      vec3 p = position;
+      // 数学形态缓慢自转，资料形态只轻轻摇摆
+    #if KIND <= 3
+      float ga = uTime * (KIND == 1 ? .07 : KIND == 2 ? .09 : .06);
+    #else
+      float ga = sin(uTime * .35) * .32;
+    #endif
+      float cs = cos(ga), sn = sin(ga);
+      p.xz = mat2(cs, -sn, sn, cs) * p.xz;
+      // 镜头靠近时，形态从微微散开到凝聚成形
+      float tr = sin(clamp(uFocus, 0., 1.) * 3.14159) * .45;
+      p += swirl(p * .45 + aRnd.z * 6.28, uTime * .45) * ((KIND == 3 ? .004 : KIND >= 4 ? .014 : .035) + tr + (1. - uFocus) * .06);
+      vec3 pos = (modelMatrix * vec4(p, 1.)).xyz;
+      float band = touch(pos);
+      float depth = project(pos, band);
+
+      float r = fract(aRnd.z * 7.13);
+      float o = 1.;
+    #if KIND == 1
+      // 吸引子：从冰蓝到暖白，按高度渐变
+      vec3 c = mix(vec3(.45,.62,1.), vec3(1.,.93,.86), smoothstep(-1.5, 2.6, position.y)) + r * .08; o = .5;
+    #elif KIND == 2
+      // 莫比乌斯：沿环一圈在香槟、淡紫、青灰之间流转
+      float mu = atan(position.z, position.x);
+      vec3 c = mix(mix(vec3(1.,.84,.68), vec3(.68,.66,1.), .5 + .5 * sin(mu)), vec3(.6,.9,.95), .5 + .5 * sin(mu * 2. + 1.3) * .6) + r * .1; o = .55;
+      gl_PointSize *= .8;
+    #elif KIND == 3
+      // 霍普夫：每一根纤维一种柔和的虹彩
+      vec3 c = mix(vec3(1.), .55 + .45 * cos(6.2832 * (aHue + vec3(0., .33, .67))), .55); o = .8;
+      gl_PointSize *= .45;
+    #elif KIND == 4
+      // 荼蘼：瓣缘一圈亮白勾出形状，瓣面淡淡的象牙白；花药金黄、花柱黄绿；萼和叶是嫩绿，枝偏褐绿
+      vec3 c = bK < .5 ? mix(vec3(1.,.93,.82), vec3(.92,.95,1.), smoothstep(.2, 1., bS))
+             : bK < 1.5 ? vec3(1.,.9,.62) : bK < 2.5 ? vec3(1.,.78,.32) : bK < 3.5 ? vec3(.58,.62,.42)
+             : bK < 4.5 ? vec3(.96,1.,.94) : bK < 5.5 ? mix(vec3(1.,.9,.92), vec3(1.,.98,.96), bS)
+             : bK < 6.5 ? mix(vec3(.5,.92,.55), vec3(.35,.7,.45), bS) : bK < 7.5 ? mix(vec3(1.,.99,.97), vec3(1.,.93,.8), bS) : vec3(.8,1.,.5);
+      o = bK < .5 ? .16 : bK < 1.5 ? .55 : bK < 2.5 ? 1.2 : bK < 3.5 ? .5 : bK < 4.5 ? .45 : bK < 5.5 ? .45
+        : bK < 6.5 ? (bS < .5 ? .55 : .22) : bK < 7.5 ? .6 : .9;
+      gl_PointSize *= .7 * (1. + step(1.5, bK) * step(bK, 2.5) * .8);
+    #elif KIND == 5
+      // 心：下深上浅的玫瑰粉；裂缝是暖金色的光；荆棘是冷冷的银紫
+      vec3 c = hT > 1.5 ? mix(vec3(1.,.9,.72), vec3(1.,.62,.55), r)
+             : hT > .5 ? mix(vec3(.62,.55,.78), vec3(.86,.88,1.), r * .6)
+             : mix(vec3(1.,.22,.42), vec3(1.,.76,.84), smoothstep(-2.2, 1.6, position.y)) + r * .06;
+      o = hT > 1.5 ? 1.1 : hT > .5 ? .75 : .3;
+      gl_PointSize *= .7;
+    #else
+      // 雪花：枝是冰白，花心冰面淡蓝，冰珠最亮，小雪花和细雪偏冷蓝
+      vec3 c = mT < .5 ? vec3(.55,.72,1.) : mT < 1.5 ? vec3(.86,.94,1.) : mT < 2.5 ? vec3(1.) : mT < 3.5 ? vec3(.72,.84,1.) : vec3(.85,.92,1.);
+      o = mT < .5 ? .2 : mT < 1.5 ? .55 : mT < 2.5 ? 1. : mT < 3.5 ? .55 : .35;
+      gl_PointSize *= .7 * (1. + step(1.5, mT) * step(mT, 2.5) * .8);
+    #endif
+      vColor = c * (1. + band * 2.);
+      float tw = .6 + .4 * sin(uTime * (1. + aRnd.z) + aRnd.z * 6.28);
+      vA = tw * smoothstep(90., 12., depth) * smoothstep(.1, .9, depth);
+      // 远处的形态暗一些，像悬在夜空里的星座；镜头到了才完全亮起
+      vO = o * uDens * uWorld * mix(.45, 1., clamp(uFocus, 0., 1.));
+    }`, { KIND: kind }, p => {
+    p.position.copy(sp.c);
+    p.rotation.y = sp.az;
+    p.updateMatrixWorld();
+  });
+  return { kind, uni, page: PAGE_SHAPE.indexOf(kind) };
+});
+
+/* ================= 月晕 ================= */
+const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const x = c.getContext('2d'), g = x.createRadialGradient(128, 128, 0, 128, 128, 128);
+    g.addColorStop(0, 'rgba(225,232,255,.12)'); g.addColorStop(.46, 'rgba(225,232,255,.1)'); g.addColorStop(.5, 'rgba(220,228,255,.07)'); g.addColorStop(.7, 'rgba(205,215,255,.035)'); g.addColorStop(1, 'rgba(200,210,255,0)'); g.addColorStop(1, 'rgba(200,210,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+    return new THREE.CanvasTexture(c);
+  })(),
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0,
+}));
+halo.position.copy(moonPos); halo.scale.setScalar(moonR * 4.2); halo.renderOrder = 9;
+scene.add(halo);
+
+/* ================= 月盘：实心、边缘锐利，带淡淡月海 ================= */
+const moonDisc = new THREE.Mesh(
+  new THREE.PlaneGeometry(moonR * 2, moonR * 2),
+  new THREE.MeshBasicMaterial({
+    map: (() => {
+      const c = document.createElement('canvas'); c.width = c.height = 512;
+      const x = c.getContext('2d');
+      const g = x.createRadialGradient(230, 220, 0, 256, 256, 252);
+      g.addColorStop(0, '#c9d0e4'); g.addColorStop(.7, '#aeb8d2'); g.addColorStop(1, '#8a96b6');
+      x.fillStyle = g; x.beginPath(); x.arc(256, 256, 250, 0, Math.PI * 2); x.fill();
+      x.save(); x.clip();
+      x.globalCompositeOperation = 'multiply';
+      [[190, 200, 70, .1], [300, 170, 50, .08], [320, 300, 85, .09], [210, 330, 45, .07], [270, 250, 30, .06], [150, 290, 35, .05]].forEach(([cx, cy, r, a]) => {
+        const m = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+        m.addColorStop(0, `rgba(120,130,160,${a * 2.2})`); m.addColorStop(1, 'rgba(120,130,160,0)');
+        x.fillStyle = m; x.fillRect(0, 0, 512, 512);
+      });
+      x.restore();
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+      return t;
+    })(),
+    transparent: true, opacity: 0, depthWrite: false,
+  })
+);
+moonDisc.position.copy(moonPos);
+moonDisc.quaternion.copy(camera.quaternion);
+moonDisc.renderOrder = 9.5;
+scene.add(moonDisc);
+
+/* ================= 重山：实心剪影，自上而下显现 ================= */
+const MT = { uReveal: { value: 0 }, uFade: { value: 1 }, uEdge: { value: 0 }, uMX: { value: MX } };
+const MT_TIME = U.uTime;
+const mountains = LAYERS.map((L, li) => {
+  const N = 420, pos = [], below = [], xs = [], sl = [], hs = [], idx = [];
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), asp = innerHeight / innerWidth;
+  for (let j = 0; j <= N; j++) {
+    const sx = -3 + 6 * j / N, sy = ridge(L, sx);
+    const slope = (ridge(L, sx + .045) - ridge(L, sx - .045)) / .09 * asp;
+    scr(sx, sy, L.d, a); scr(sx, -1.9, L.d, b);
+    pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+    below.push(0, sy + 1.9); xs.push(sx, sx); sl.push(slope, slope); hs.push(sy - L.base, -1.9 - L.base);
+    if (j < N) { const k = j * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('aB', new THREE.Float32BufferAttribute(below, 1));
+  g.setAttribute('aX', new THREE.Float32BufferAttribute(xs, 1));
+  g.setAttribute('aS', new THREE.Float32BufferAttribute(sl, 1));
+  g.setAttribute('aH', new THREE.Float32BufferAttribute(hs, 1));
+  g.setIndex(idx);
+  const m = new THREE.Mesh(g, new THREE.ShaderMaterial({
+    transparent: true, depthWrite: true, side: THREE.DoubleSide,
+    uniforms: { ...MT, uTime: MT_TIME, uLayer: { value: li / (LAYERS.length - 1) } },
+    vertexShader: `attribute float aB, aX, aS, aH; varying float vB, vX, vS, vH;
+      void main(){ vB = aB; vX = aX; vS = aS; vH = aH; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
+    fragmentShader: `
+      uniform float uReveal, uFade, uLayer, uEdge, uMX, uTime; varying float vB, vX, vS, vH;
+      float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float n2(vec2 p){ vec2 i = floor(p), f = fract(p), u = f * f * (3. - 2. * f);
+        return mix(mix(h2(i), h2(i + vec2(1., 0.)), u.x), mix(h2(i + vec2(0., 1.)), h2(i + vec2(1., 1.)), u.x), u.y); }
+      float fbm(vec2 p){ float t = 0., a = .5; for (int k = 0; k < 5; k++) { t += a * n2(p); p = p * 2.03 + 17.; a *= .5; } return t; }
+      void main(){
+        // 山脊轮廓：从主峰开始向两侧慢慢描出来
+        float e = clamp(uEdge * 1.6 - uLayer * .6, 0., 1.) * 2.6;
+        float drawn = smoothstep(e, e - .35, abs(vX - uMX));
+        float rim = exp(-vB * 160.) * drawn;
+        // 山体：轮廓描出之后，自上而下浮现
+        float local = clamp(uReveal * 1.9 - uLayer * .9, 0., 1.) * 2.8;
+        float body = smoothstep(local, local - .35, vB);
+        if ((body < .004 && rim < .004) || uFade < .01) discard;
+        float grain = fract(sin(dot(floor(vec2(vX * 140., vB * 140.)), vec2(12.9898, 78.233))) * 43758.5453);
+        if (grain > uFade * 1.15) discard;
+
+        float L = uLayer;
+        // 远淡近浓：远山是月色里的灰蓝，近山近乎墨黑
+        vec3 rockC = mix(vec3(.0105, .013, .03), vec3(.0011, .0012, .0022), pow(L, .7));
+        vec3 hazeC = mix(vec3(.028, .034, .075), vec3(.005, .006, .014), L);
+        // 月在右上：向右下降的山坡迎月受光，另一侧沉在暗处
+        float lit = mix(smoothstep(.25, -1.3, vS), .45, smoothstep(.0, .35, vB));
+        // 皴擦：顺着坡向的细碎纹理
+        float cun = fbm(vec2(vX * 16. - vB * clamp(vS, -1.5, 1.5) * 10., vB * 20.));
+        float tex = fbm(vec2(vX * 8., vB * 4.));
+        vec3 rock = rockC * mix(.4, 1.55, lit) * (.75 + .5 * cun) * (.85 + .3 * tex);
+        // 山脚化入缓慢流动的夜雾
+        float m = fbm(vec2(vX * 2.2 - uTime * .012 + L * 5., vH * 3.5 + uTime * .006));
+        float haze = smoothstep(.17 + m * .16, -.07, vH);
+        vec3 c = mix(rock, hazeC * (.78 + .5 * m), haze) * body;
+        c += vec3(.11, .13, .22) * rim * (.2 + .8 * lit) * (1. - L * .5);
+        gl_FragColor = vec4(c, max(body, rim) * uFade);
+      }`,
+  }));
+  m.renderOrder = li;
+  scene.add(m);
+  return m;
+});
+
+/* ================= 松：近处山脊上的几棵水墨松 ================= */
+const pineTex = seed => {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d'), R = (k => () => (k = (k * 16807) % 2147483647) / 2147483647)(seed * 9973 + 7);
+  x.strokeStyle = x.fillStyle = 'rgba(3,4,8,1)'; x.lineCap = 'round';
+  // 树干：一笔略带弯曲、上细下粗
+  const lean = (R() - .5) * 50;
+  for (let k = 0; k < 6; k++) {
+    x.lineWidth = 7 - k; x.globalAlpha = .55;
+    x.beginPath(); x.moveTo(128 + k * .4, 252);
+    x.bezierCurveTo(128 - lean * .3, 190, 128 + lean * .8, 120, 128 + lean, 40 + k * 3); x.stroke();
+  }
+  // 层层平展的松针团
+  const tiers = 5 + Math.floor(R() * 3);
+  for (let t = 0; t < tiers; t++) {
+    const k = t / (tiers - 1), cy = 52 + k * 120, cx = 128 + lean * (1 - k * .9) + (R() - .5) * 26;
+    const w = 26 + k * 52 + R() * 20, side = R() < .5 ? -1 : 1;
+    x.globalAlpha = .7; x.lineWidth = 2.2;
+    x.beginPath(); x.moveTo(128 + lean * (1 - k), cy + 6); x.lineTo(cx + side * w * .4, cy); x.stroke();
+    for (let n = 0; n < 220; n++) {
+      const u = (R() - .5) * 2, px = cx + side * w * .2 + u * w * .55, py = cy - Math.abs(u) * 3 + (R() - .5) * 10;
+      const a = (R() - .5) * .9 - (R() < .5 ? 0 : Math.PI), len = 4 + R() * 9;
+      x.globalAlpha = .35 + R() * .35; x.lineWidth = .9 + R() * .8;
+      x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(a) * len, py + Math.sin(a) * len * .35); x.stroke();
+    }
+  }
+  const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 4;
+  return tx;
+};
+const pines = [].map(([li, sx, hN], i) => {
+  const L = LAYERS[li], ry = ridge(L, sx);
+  const bot = scr(sx, ry - hN * .06, L.d - .05), top = scr(sx, ry + hN * .94, L.d - .05);
+  const hW = bot.distanceTo(top);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(hW, hW), new THREE.MeshBasicMaterial({
+    map: pineTex(i + 1), transparent: true, depthWrite: false, opacity: 0,
+  }));
+  mesh.position.copy(bot).lerp(top, .5);
+  mesh.quaternion.copy(camera.quaternion);
+  mesh.renderOrder = li + .5;
+  mesh.userData.layer = li / (LAYERS.length - 1);
+  scene.add(mesh);
+  return mesh;
+});
+
+/* ================= 山脊光点 ================= */
+{
+  const n = MOBILE ? 9000 : 18000;
+  const pos = new Float32Array(n * 3), ax = new Float32Array(n), al = new Float32Array(n), ar = new Float32Array(n);
+  const v = new THREE.Vector3();
+  const LW = [.32, .26, .2, .13, .09];
+  for (let i = 0; i < n; i++) {
+    let li, sx, L;
+    for (;;) {
+      let r = Math.random(); li = 0; while (r > LW[li] && li < 4) { r -= LW[li]; li++; }
+      L = LAYERS[li]; sx = rand(-1.6, 1.6);
+      const slope = (ridge(L, sx + .004) - ridge(L, sx - .004)) / .008;
+      if (Math.random() < .12 + .88 * THREE.MathUtils.smoothstep(-slope, -.1, .8)) break;
+    }
+    const sy = ridge(L, sx) - (Math.random() < .8 ? Math.abs(gauss()) * .002 : -Math.log(Math.random()) * .02);
+    scr(sx, sy, L.d - .08, v);
+    pos.set([v.x, v.y, v.z], i * 3); ax[i] = sx; al[i] = li / (LAYERS.length - 1); ar[i] = Math.random();
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('aX', new THREE.BufferAttribute(ax, 1));
+  g.setAttribute('aL', new THREE.BufferAttribute(al, 1));
+  g.setAttribute('aR', new THREE.BufferAttribute(ar, 1));
+  const rp = new THREE.Points(g, new THREE.ShaderMaterial({
+    uniforms: { uTime: U.uTime, uScale: U.uScale, uEdge: MT.uEdge, uFade: MT.uFade, uMX: MT.uMX },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `
+      uniform float uTime, uScale, uEdge, uFade, uMX;
+      attribute float aX, aL, aR;
+      varying float vA; varying vec3 vC;
+      void main(){
+        float rise = 1. - uFade;
+        vec3 pp = position;
+        pp.y += rise * rise * (3. + aR * 7.);
+        pp.x += sin(aR * 50. + uTime * .6) * rise * 2.;
+        vec4 mv = modelViewMatrix * vec4(pp, 1.);
+        gl_Position = projectionMatrix * mv;
+        float e = clamp(uEdge * 1.6 - aL * .6, 0., 1.) * 2.6;
+        float drawn = smoothstep(e, e - .35, abs(aX - uMX));
+        float tw = .55 + .45 * sin(uTime * (1. + aR * 2.) + aR * 40.);
+        vA = drawn * tw * mix(.9, .45, aL) * smoothstep(0., .5, uFade);
+        gl_PointSize = min(.055 * (.5 + aR * .9) * uScale / -mv.z, 30.);
+        vC = mix(vec3(.6,.7,1.), vec3(.9,.94,1.), aR);
+      }`,
+    fragmentShader: `
+      varying float vA; varying vec3 vC;
+      void main(){
+        float d = length(gl_PointCoord - .5);
+        if (d > .5) discard;
+        gl_FragColor = vec4(vC, pow(1. - d * 2., 2.) * vA);
+      }`,
+  }));
+  rp.renderOrder = 6;
+  rp.frustumCulled = false;
+  scene.add(rp);
+}
+
+/* ================= 月光流水：沿山势，细而弯，不受泛光 ================= */
+const pxW = p => 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * p.distanceTo(camera.position) / innerHeight;
+const flowPts = (() => {
+  const L0 = LAYERS[0], top0 = ridge(L0, MX), mb = MY - MOON_PX * 2 / innerHeight;
+  const pts = [
+    [MX, mb + .004, L0.d - .25],
+    [MX, mb - (mb - top0) * .5, L0.d - .25],
+    [MX, top0 + .012, L0.d - .25],
+    [MX, top0 - .004, L0.d - .25],
+    ...RIVER.filter((_, i) => i % 4 === 0 || i === RIVER.length - 1).map(([x, y, li]) => [x, y, LAYERS[li].d - .25]),
+  ];
+  return pts;
+})();
+const flowCurve = new THREE.CatmullRomCurve3(flowPts.map(([x, y, d]) => scr(x, y, d)), false, 'centripetal');
+// 垂直下落段在整条水路中所占的比例：这一段笔直、不摆动
+const U_CONTACT = (() => {
+  const pts = flowCurve.getSpacedPoints(400), topY = scr(MX, ridge(LAYERS[0], MX), LAYERS[0].d).y;
+  for (let i = 0; i < pts.length; i++) if (pts[i].y <= topY + .02) return i / 400;
+  return .1;
+})();
+const PATH_N = 96;
+const FU = {
+  uTime: U.uTime, uFlow: { value: 0 }, uFade: { value: 1 }, uContact: { value: U_CONTACT },
+  uPath: { value: [] }, uSide: { value: [] }, uPx: { value: [] },
+};
+for (let j = 0; j < PATH_N; j++) {
+  const u = j / (PATH_N - 1), p = flowCurve.getPointAt(u), t = flowCurve.getTangentAt(u);
+  const view = p.clone().sub(camera.position).normalize();
+  FU.uPath.value.push(p);
+  FU.uSide.value.push(new THREE.Vector3().crossVectors(t, view).normalize());
+  FU.uPx.value.push(pxW(p));
+}
+{
+  // 每颗流星是一条沿水路的小光带：头部亮，尾巴渐细渐隐
+  const METEORS = MOBILE ? 520 : 900, K = 14;
+  const pos = [], aT = [], aSd = [], aSeed = [], aLane = [], idx = [];
+  for (let m = 0; m < METEORS; m++) {
+    const seed = Math.random(), lane = gauss() * .32;
+    const base = pos.length / 3;
+    for (let k = 0; k <= K; k++) {
+      for (const sd of [-1, 1]) { pos.push(0, 0, 0); aT.push(k / K); aSd.push(sd); aSeed.push(seed); aLane.push(lane); }
+      if (k < K) { const a = base + k * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('aT', new THREE.Float32BufferAttribute(aT, 1));
+  g.setAttribute('aSd', new THREE.Float32BufferAttribute(aSd, 1));
+  g.setAttribute('aSeed', new THREE.Float32BufferAttribute(aSeed, 1));
+  g.setAttribute('aLane', new THREE.Float32BufferAttribute(aLane, 1));
+  g.setIndex(idx);
+  const meteors = new THREE.Mesh(g, new THREE.ShaderMaterial({
+    uniforms: FU, transparent: true, depthWrite: false, depthTest: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+    vertexShader: `
+      uniform float uTime, uFlow, uFade, uContact;
+      uniform vec3 uPath[${PATH_N}], uSide[${PATH_N}];
+      uniform float uPx[${PATH_N}];
+      attribute float aT, aSd, aSeed, aLane;
+      varying float vA, vSd, vT;
+      vec3 at(float u, out vec3 side, out float px){
+        float fi = clamp(u, 0., 1.) * float(${PATH_N - 1});
+        int i0 = int(floor(fi)); int i1 = min(i0 + 1, ${PATH_N - 1}); float f = fract(fi);
+        side = normalize(mix(uSide[i0], uSide[i1], f)); px = mix(uPx[i0], uPx[i1], f);
+        return mix(uPath[i0], uPath[i1], f);
+      }
+      void main(){
+        float speed = .07 + aSeed * .05;
+        float head = fract(aSeed * 13.7 + uTime * speed);
+        // 下落段：重力加速，先慢后快
+        if (head < uContact) { float k = head / uContact; head = uContact * k * k; }
+        float tail = .018 + aSeed * .03;
+        float u = head - aT * tail;
+        vec3 side; float px;
+        vec3 p = at(u, side, px);
+        float flowing = smoothstep(uContact, uContact + .04, u);
+        float spread = 1.2 + 13. * max(u - uContact, 0.) * flowing;
+        float off = (aLane * mix(.35, 1., flowing) + .18 * sin(u * 40. + aSeed * 30.) * flowing) * spread;
+        float hw = mix(1.1, .15, aT) * (.7 + aSeed * .6);
+        p += side * (off + aSd * hw) * px;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.);
+        vSd = aSd; vT = aT;
+        float vis = step(0., u) * smoothstep(uFlow * 1.02, uFlow * 1.02 - .03, u) * (1. - smoothstep(.93, 1., u));
+        vA = vis * uFade * pow(1. - aT, 1.6) * mix(1.1, .7, u);
+      }`,
+    fragmentShader: `
+      varying float vA, vSd, vT;
+      void main(){
+        float edge = exp(-vSd * vSd * 2.2);
+        vec3 c = mix(vec3(1.), vec3(.68,.8,1.), vT);
+        gl_FragColor = vec4(c, vA * edge * .9);
+      }`,
+  }));
+  meteors.frustumCulled = false;
+  scene2.add(meteors);
+}
+
+/* ================= 纸船 ================= */
+const seaY = (x, z, t) => SEA.y - 2.2 + Math.sin(x * .35 + t * .8) * .38 + Math.sin(z * .45 - t * 1.1) * .3 + Math.sin((x + z) * .9 + t * 1.7) * .08;
+const boatGeo = new THREE.BufferGeometry();
+boatGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+  -.24, 0, 0,   .24, 0, 0,                         // 0 1 船底
+  -.46, .16, .1,  .46, .16, .1,                    // 2 3 前舷
+  -.46, .16, -.1, .46, .16, -.1,                   // 4 5 后舷
+  -.2, .16, 0,  .2, .16, 0,  .02, .46, 0,          // 6 7 8 帆
+], 3));
+boatGeo.setIndex([0, 1, 3, 0, 3, 2, 0, 5, 1, 0, 4, 5, 6, 7, 8]);
+const boatEdges = new THREE.EdgesGeometry(boatGeo, 1);
+const glowTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d'), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.25, 'rgba(255,255,255,.35)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+})();
+// [x, z, 朝向]：四艘船横着排开、前后略微错落，标签不会被后面的船挡住
+const BOAT_POS = [[-1.35, 1.1, .5], [0, .1, -.25], [1.4, .9, .4]];
+const boatHits = [];
+const boatLayer = document.getElementById('boats');
+const boats = CONFIG.boats.map((b, i) => {
+  const grp = new THREE.Group();
+  const add = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending };
+  const fill = new THREE.Mesh(boatGeo, new THREE.MeshBasicMaterial({ color: 0xffeedd, opacity: .16, side: THREE.DoubleSide, ...add }));
+  const lines = new THREE.LineSegments(boatEdges, new THREE.LineBasicMaterial({ color: 0xfff0e0, opacity: 1, ...add }));
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.7), new THREE.MeshBasicMaterial({ map: glowTex, color: 0xffd9b8, opacity: .45, ...add }));
+  glow.rotation.x = -Math.PI / 2; glow.position.y = .02;
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffe6cc, opacity: .35, ...add }));
+  halo.scale.set(1.1, 1.1, 1); halo.position.y = .25;
+  // 透明的点击热区，比船身大一圈，手指更好点中
+  const hit = new THREE.Mesh(new THREE.SphereGeometry(.55, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
+  hit.position.y = .2; hit.userData.url = b.url;
+  boatHits.push(hit);
+  grp.add(fill, lines, glow, halo, hit);
+  grp.rotation.y = BOAT_POS[i][2];
+  grp.scale.setScalar(.85);
+  grp.userData = { x: BOAT_POS[i][0], z: BOAT_POS[i][1], ph: i * 1.9, mats: [fill.material, lines.material, glow.material, halo.material], base: [.16, 1, .45, .35] };
+  scene.add(grp);
+
+  const a = document.createElement('a');
+  a.className = 'boat'; a.href = b.url; a.target = '_blank'; a.rel = 'noopener';
+  a.innerHTML = `<small>N°0${i + 1}</small><b>${b.name}<i>↗</i></b>`;
+  boatLayer.appendChild(a);
+  grp.userData.label = a;
+  return grp;
+});
+const tmpV = new THREE.Vector3();
+function updBoats(c, t) {
+  const k = THREE.MathUtils.smoothstep(c, LAST - .45, LAST - .05);
+  for (const g of boats) {
+    const d = g.userData;
+    g.visible = k > .001;
+    const x = SEA.x + d.x + Math.sin(t * .25 + d.ph) * .1, z = SEA.z + d.z + Math.cos(t * .2 + d.ph) * .08;
+    g.position.set(x, seaY(x, z, t) + .03 - (1 - k) * .6, z);
+    g.rotation.z = Math.sin(t * 1.1 + d.ph) * .09;
+    g.rotation.x = Math.cos(t * .9 + d.ph) * .07;
+    d.mats.forEach((m, j) => (m.opacity = d.base[j] * k));
+
+    tmpV.copy(g.position); tmpV.y += .62; tmpV.project(camera);
+    const sx = (tmpV.x * .5 + .5) * innerWidth, sy = (-tmpV.y * .5 + .5) * innerHeight;
+    d.label.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, -100%)`;
+    d.label.style.opacity = k;
+    d.label.classList.toggle('live', k > .9);
+  }
+}
+
+/* ================= 速度线：冲刺时迎面掠过的光丝 ================= */
+const SPEED = { value: 0 };
+{
+  const N = MOBILE ? 700 : 1400, pos = [], aE = [], aR = [];
+  for (let i = 0; i < N; i++) {
+    const a = Math.random() * Math.PI * 2, r = rand(1.6, 13), z = rand(-215, 16), seed = Math.random();
+    const x = Math.cos(a) * r, y = Math.sin(a) * r * .75 + 1 + Math.max(0, -z) * -RISE;
+    for (const e of [0, 1]) { pos.push(x, y, z); aE.push(e); aR.push(seed); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('aE', new THREE.Float32BufferAttribute(aE, 1));
+  g.setAttribute('aR', new THREE.Float32BufferAttribute(aR, 1));
+  const lines = new THREE.LineSegments(g, new THREE.ShaderMaterial({
+    uniforms: { uSpeed: SPEED },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `
+      uniform float uSpeed; attribute float aE, aR; varying float vA;
+      void main(){
+        vec3 p = position;
+        // 速度越快，光丝拉得越长
+        p += aE * uSpeed * (3. + aR * 9.) * normalize(vec3(0., ${RISE}, 1.));
+        vec4 mv = modelViewMatrix * vec4(p, 1.);
+        gl_Position = projectionMatrix * mv;
+        vA = uSpeed * (1. - aE * .9) * smoothstep(60., 6., -mv.z) * smoothstep(.5, 3., -mv.z) * (.35 + aR * .65);
+      }`,
+    fragmentShader: `varying float vA; void main(){ gl_FragColor = vec4(vec3(.78,.86,1.), vA * .8); }`,
+  }));
+  lines.frustumCulled = false;
+  lines.renderOrder = 11;
+  scene.add(lines);
+}
+
+/* ================= 后期：辉光 + 颗粒 + 暗角 ================= */
+const composer = new EffectComposer(renderer);
+composer.setPixelRatio(PR);
+composer.setSize(innerWidth, innerHeight);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), .55, .32, .22);
+composer.addPass(bloom);
+const silkPass = new RenderPass(scene2, camera);
+silkPass.clear = false; silkPass.clearDepth = false;
+composer.addPass(silkPass);
+composer.addPass(new OutputPass());
+const grain = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uSpeed: SPEED },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float uTime, uSpeed; varying vec2 vUv;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
+    void main(){
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      // 冲刺时的径向模糊：越靠边缘拖得越长，画面中心保持清晰
+      if (uSpeed > .01) {
+        vec2 dir = (vUv - .5) * uSpeed * .09;
+        vec3 acc = c;
+        for (int i = 1; i < 8; i++) acc += texture2D(tDiffuse, vUv - dir * float(i) / 7.).rgb;
+        c = acc / 8.;
+      }
+      c += (h(vUv * 1200. + fract(uTime) * 91.) - .5) * .028;
+      float v = smoothstep(1.2, .35, length((vUv - .5) * vec2(1., 1.25)));
+      c *= mix(.5, 1., v);
+      gl_FragColor = vec4(c, 1.);
+    }`,
+});
+composer.addPass(grain);
+
+function setScale() { U.uScale.value = innerHeight * PR * .5 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)); }
+setScale();
+
+/* ================= 运镜 ================= */
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+// 每一页的机位：镜头位置 + 注视点
+const UP = V3(0, 1, 0);
+const STATIONS = PAGE_SHAPE.map((kind, k) => {
+  if (k === 0) return { pos: V3(0, .5, 15), tgt: V3(0, 0, 0) };
+  if (k === LAST) return { pos: SEA.clone().add(V3(0, -.7, 7.5)), tgt: SEA.clone().add(V3(0, 3, -34)) };
+  const sp = SPOTS[kind];
+  return {
+    pos: sp.O.clone().applyAxisAngle(UP, sp.az).add(sp.c),
+    tgt: (sp.T || V3(0, 0, 0)).clone().applyAxisAngle(UP, sp.az).add(sp.c),
+  };
+});
+// 两页之间的飞行：先微微后撤蓄力，然后加速向前，擦着刚才的形态冲过去，
+// 一路扎进深处，迎上下一个形态时减速、略冲过头再稳住
+// side 擦身而过的方向，roll 冲刺时的轻微倾斜
+const FLIGHTS = [
+  { side: 0,  roll: .08 },   // 月 → 荼蘼：从山间沉下去
+  { side: -1, roll: .14 },   // 荼蘼 → 吸引子
+  { side: 1,  roll: -.14 },  // 吸引子 → 心
+  { side: -1, roll: .16 },   // 心 → 莫比乌斯
+  { side: 1,  roll: -.14 },  // 莫比乌斯 → 镜
+  { side: -1, roll: .16 },   // 镜 → 霍普夫
+  { side: 1,  roll: -.1 },   // 霍普夫 → 海：贴着海面滑进去
+];
+const legs = FLIGHTS.map((F, k) => {
+  const A = STATIONS[k], B = STATIONS[k + 1];
+  const pts = [A.pos];
+  if (k === 0) pts.push(V3(-.4, 1.6, 11.5));
+  else {
+    // 从刚才的形态身边掠过
+    const from = SPOTS[PAGE_SHAPE[k]].c;
+    pts.push(from.clone().add(V3(F.side * 2.8, .6, 1.5)), from.clone().add(V3(F.side * 3.2, .4, -6)));
+    // 远远对准下一个目标
+    pts.push(B.pos.clone().add(V3(0, k === LAST - 1 ? 2.5 : .5, 11)));
+  }
+  pts.push(B.pos);
+  return { A, B, F, curve: new THREE.CatmullRomCurve3(pts, false, 'centripetal') };
+});
+// 先慢后快再慢；首尾带一点后撤和冲过头
+const easeIO = x => x < .5 ? 16 * x ** 5 : 1 - Math.pow(-2 * x + 2, 5) / 2;
+const _ahead = new THREE.Vector3(), _tan = new THREE.Vector3();
+function flight(c, outPos, outTgt) {
+  const k = Math.min(LAST - 1, Math.floor(c)), L = legs[k];
+  // 每页开头和结尾留一段停驻，中间是飞行
+  const x = THREE.MathUtils.clamp((c - k - .12) / .76, 0, 1), t = easeIO(x);
+  L.curve.getPoint(t, outPos);
+  // 蓄力与冲过头：沿视线方向前后微动
+  const nudge = -Math.sin(Math.min(x / .3, 1) * Math.PI) * (x < .3 ? 1.2 : 0) + Math.sin(THREE.MathUtils.clamp((x - .7) / .3, 0, 1) * Math.PI) * .9;
+  _tan.copy(L.B.tgt).sub(L.A.pos).normalize();
+  outPos.addScaledVector(_tan, nudge);
+  // 视线：一起飞就盯住深处的下一个形态，途中略微顺着航向
+  L.curve.getPoint(Math.min(1, t + .08), _ahead);
+  _ahead.sub(outPos).normalize().multiplyScalar(12).add(outPos);
+  outTgt.copy(L.A.tgt).lerp(L.B.tgt, THREE.MathUtils.smoothstep(t, .0, .4)).lerp(_ahead, Math.sin(t * Math.PI) * .2);
+  const arc = Math.sin(t * Math.PI);
+  return { roll: arc * L.F.roll, kick: arc * arc };
+}
+// 资料页（ii · iv · vi）：把镜头的注视点挪开，让形状让出位置给资料卡（竖屏往上让，横屏往左让）
+// 竖屏上荼蘼和心不往上让，留在画面正中
+const INFO_PAGES = [1, 3, 5], INFO_PORTRAIT = { 1: 0, 3: 0, 5: 1.25 };
+const infoW = (c, portrait) => Math.max(...INFO_PAGES.map(k => (portrait ? INFO_PORTRAIT[k] : 1) * (1 - THREE.MathUtils.smoothstep(Math.abs(c - k), .05, .65))));
+
+/* ================= 输入 ================= */
+// 一次滑动翻一页：页面不再原生滚动，手势直接触发一段完整的运镜
+let scrollCur = 0, page = 0, turn = null;
+const TURN_DUR = 2.3;   // 每次翻页的运镜时长（秒）
+function go(dir) {
+  if (!formed || turn) return;
+  const to = Math.max(0, Math.min(LAST, page + dir));
+  if (to === page) return;
+  turn = { from: scrollCur, to, t: 0 };
+  page = to;
+}
+function updTurn(dt) {
+  if (!turn) return;
+  turn.t = Math.min(1, turn.t + dt / TURN_DUR);
+  scrollCur = turn.from + (turn.to - turn.from) * turn.t;
+  if (turn.t >= 1) turn = null;
+}
+// 手机：上滑下一页，下滑上一页
+let tY = null, tX = 0;
+addEventListener('touchstart', e => { tY = e.touches[0].clientY; tX = e.touches[0].clientX; }, { passive: true });
+addEventListener('touchend', e => {
+  if (tY === null) return;
+  const t = e.changedTouches[0], dy = tY - t.clientY, dx = tX - t.clientX;
+  tY = null;
+  if (Math.abs(dy) > 36 && Math.abs(dy) > Math.abs(dx)) go(dy > 0 ? 1 : -1);
+}, { passive: true });
+// 电脑：滚轮 / 触控板，一次手势只翻一页（惯性滚动不会连翻）
+let lastWheel = 0, wheelSpent = false;
+addEventListener('wheel', e => {
+  const now = performance.now(), quiet = now - lastWheel > 260;
+  lastWheel = now;
+  if (quiet) wheelSpent = false;
+  if (turn || wheelSpent || Math.abs(e.deltaY) < 4) return;
+  wheelSpent = true;
+  go(e.deltaY > 0 ? 1 : -1);
+}, { passive: true });
+addEventListener('keydown', e => {
+  if (['ArrowDown', 'PageDown', ' '].includes(e.key)) go(1);
+  else if (['ArrowUp', 'PageUp'].includes(e.key)) go(-1);
+});
+function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
+const ndc = new THREE.Vector2(), ray = new THREE.Raycaster(), plane = new THREE.Plane(), hit = new THREE.Vector3();
+const lookTarget = new THREE.Vector3();
+let mouseOn = false, mouseStr = 0;
+function project(e) {
+  ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const n = camera.getWorldDirection(new THREE.Vector3()).negate();
+  // 第五章投到海面，其它章节投到焦点平面
+  if (scrollCur > LAST - .4) plane.set(new THREE.Vector3(0, 1, 0), 2.2 - SEA.y);
+  else plane.setFromNormalAndCoplanarPoint(n, lookTarget.clone().lerp(camera.position, .25));
+  return ray.ray.intersectPlane(plane, hit);
+}
+// 点中纸船 → 打开链接（用 click，移动端才算有效的用户手势）
+addEventListener('click', e => {
+  if (e.target.closest('button, a') || scrollCur < LAST - .15) return;
+  ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const h = ray.intersectObjects(boatHits, false)[0];
+  if (h) window.open(h.object.userData.url, '_blank');
+});
+addEventListener('pointerdown', e => {
+  if (e.target.closest('button, a')) return;
+  askGyro();
+  if (project(e)) {
+    U.uMouse.value.copy(hit);
+    U.uPulseC.value.copy(hit);
+    U.uPulseT.value = U.uTime.value;
+    mouseOn = true;
+    chime();
+  }
+});
+addEventListener('pointermove', e => {
+  if (!mouseOn && e.pointerType !== 'mouse') return;
+  mouseOn = true;
+  if (project(e)) U.uMouse.value.lerp(hit, .5);
+});
+['pointerup', 'pointercancel'].forEach(ev => addEventListener(ev, e => { if (e.pointerType !== 'mouse') mouseOn = false; }));
+document.addEventListener('mouseleave', () => (mouseOn = false));
+
+let gx = 0, gy = 0, tgx = 0, tgy = 0, gyroAsked = false;
+function askGyro() {
+  if (gyroAsked) return; gyroAsked = true;
+  const D = window.DeviceOrientationEvent;
+  if (D && typeof D.requestPermission === 'function') D.requestPermission().catch(() => {});
+}
+let baseBeta = null, baseGamma = null;
+addEventListener('deviceorientation', e => {
+  if (e.gamma == null || e.beta == null) return;
+  if (baseBeta === null) { baseBeta = e.beta; baseGamma = e.gamma; }
+  // 基准缓慢跟随，长时间换个姿势拿手机也会慢慢回中
+  baseBeta += (e.beta - baseBeta) * .004; baseGamma += (e.gamma - baseGamma) * .004;
+  tgx = Math.max(-1, Math.min(1, (e.gamma - baseGamma) / 22));
+  tgy = Math.max(-1, Math.min(1, (e.beta - baseBeta) / 22));
+});
+addEventListener('mousemove', e => { tgx = e.clientX / innerWidth * 2 - 1; tgy = e.clientY / innerHeight * 2 - 1; });
+
+/* ================= 声音：背景音乐 Brave + 点击时的风铃 ================= */
+let ac = null, master = null, soundOn = false;
+const NOTES = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51];
+function initAudio() {
+  ac = new (window.AudioContext || window.webkitAudioContext)();
+  master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination);
+  const conv = ac.createConvolver(), len = ac.sampleRate * 4, ir = ac.createBuffer(2, len, ac.sampleRate);
+  for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6); }
+  conv.buffer = ir;
+  const wet = ac.createGain(); wet.gain.value = .7; conv.connect(wet); wet.connect(master);
+  master.bus = conv;
+}
+function chime() {
+  if (!ac || !soundOn) return;
+  const t = ac.currentTime, f = NOTES[Math.floor(Math.random() * NOTES.length)];
+  [[f, .1], [f * 2.002, .03]].forEach(([fr, g]) => {
+    const o = ac.createOscillator(), gn = ac.createGain();
+    o.frequency.value = fr; gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(g, t + .01);
+    gn.gain.exponentialRampToValueAtTime(.0001, t + 3);
+    o.connect(gn); gn.connect(master); gn.connect(master.bus); o.start(t); o.stop(t + 3.1);
+  });
+}
+const sndBtn = document.getElementById('snd'), bgm = document.getElementById('bgm');
+let musicStarted = false;
+function setSound(on) {
+  if (!ac) initAudio();
+  soundOn = on;
+  ac.resume();
+  master.gain.setTargetAtTime(on ? .9 : 0, ac.currentTime, .6);
+  if (on) bgm.play().then(() => (musicStarted = true)).catch(() => {});
+  else bgm.pause();
+  sndBtn.textContent = on ? 'SOUND ON' : 'SOUND OFF';
+  sndBtn.classList.toggle('on', on);
+}
+// 第一次点屏幕任何地方就开始放音乐（手机浏览器只允许在点击时开始播放，
+// 所以按下和抬起都试一次，哪个先被允许就用哪个）
+function firstTouch(e) {
+  if (musicStarted || e.target.closest('#snd')) return;
+  setSound(true);
+}
+['pointerdown', 'touchend', 'click'].forEach(ev => addEventListener(ev, firstTouch, { capture: true, passive: true }));
+sndBtn.addEventListener('click', () => setSound(!soundOn));
+document.addEventListener('visibilitychange', () => {
+  if (!ac) return;
+  if (document.hidden) { ac.suspend(); bgm.pause(); }
+  else { ac.resume(); if (soundOn) bgm.play().catch(() => {}); }
+});
+
+/* ================= 开场：唤月 ================= */
+let introT = -1, formed = false;
+const tagMoon = document.getElementById('tagMoon'), tagPeak = document.getElementById('tagPeak');
+const guideCall = document.querySelector('#guide .call');
+const html = document.documentElement;
+addEventListener('touchmove', e => { if (html.classList.contains('locked')) e.preventDefault(); }, { passive: false });
+function callMoon() {
+  if (introT >= 0) return;
+  introT = 0;
+  document.body.classList.add('calling');
+  askGyro();
+  chime();
+}
+moonBtn.addEventListener('click', callMoon);
+function updIntro(dt) {
+  if (introT < 0) return;
+  introT += dt;
+  U.uIntro.value = Math.min(1, introT / 3.8);
+  DUST.value = 1 - .75 * THREE.MathUtils.smoothstep(introT, .5, 3.5);
+  MT.uEdge.value = THREE.MathUtils.smoothstep(introT, 2.8, 6);
+  MT.uReveal.value = THREE.MathUtils.smoothstep(introT, 4, 7.2);
+  FU.uFlow.value = THREE.MathUtils.smoothstep(introT, 6.6, 11);
+  if (!formed && introT > 7.4) {
+    formed = true;
+    document.body.classList.add('formed');
+  }
+}
+
+/* ================= 文字 ================= */
+const chs = [...document.querySelectorAll('.ch')];
+chs.forEach(ch => {
+  // 资料卡：逐行依次浮现
+  ch.querySelectorAll('.r').forEach((el, j) => (el.style.transitionDelay = `${150 + j * 70}ms`));
+  const zh = ch.querySelector('.zh');
+  if (!zh) return;
+  let n = 0;
+  zh.innerHTML = zh.innerHTML.split(/(<br>)/).map(part => part === '<br>' ? part :
+    [...part].map(c => `<span style="transition-delay:${(n++) * 45}ms">${c}</span>`).join('')).join('');
+});
+const intro = document.getElementById('intro'), endEl = document.getElementById('end');
+const railFill = document.getElementById('railFill'), railLis = [...document.querySelectorAll('#rail li')], pctEl = document.getElementById('pct');
+let lastCh = -1;
+const decos = [...document.querySelectorAll('.deco')], decoLayer = document.getElementById('decos');
+function updText(p) {
+  intro.style.opacity = Math.max(0, 1 - p / .22);
+  const k = Math.round(p), near = Math.abs(p - k) < .3 && !(k === 0 && p < .12);
+  const active = near ? k : -1;
+  if (active !== lastCh) {
+    chs.forEach(c => c.classList.toggle('on', +c.dataset.k === active));
+    decos.forEach(d => d.classList.toggle('on', +d.dataset.k === active));
+    railLis.forEach((l, i) => l.classList.toggle('on', i === Math.min(LAST, Math.round(p))));
+    lastCh = active;
+  }
+  endEl.classList.toggle('on', p > LAST - .07);
+  railFill.style.transform = `scaleY(${p / LAST})`;
+  pctEl.textContent = `LATENT ${(p / LAST * 100).toFixed(1).padStart(4, '0')}%`;
+}
+
+/* ================= 主循环 ================= */
+const clock = new THREE.Clock();
+const camPos = new THREE.Vector3(), right = new THREE.Vector3(), up = new THREE.Vector3(), prevCam = new THREE.Vector3(0, .5, 15);
+function frame() {
+  const dt = Math.min(clock.getDelta(), .05), t = clock.elapsedTime;
+  updTurn(dt);
+  const c = scrollCur;
+
+  // 月光散成星尘；到最后一页前，星尘聚成海
+  U.uA.value = THREE.MathUtils.smoothstep(c, .04, .9);
+  U.uB.value = THREE.MathUtils.smoothstep(c, LAST - .9, LAST - .08);
+  const world = THREE.MathUtils.smoothstep(c, .05, .55);
+  for (const sh of shapes) {
+    sh.uni.uWorld.value = world;
+    sh.uni.uFocus.value = 1 - THREE.MathUtils.smoothstep(Math.abs(c - sh.page), .15, .9);
+  }
+  U.uTime.value = t;
+  mouseStr += ((mouseOn ? 1 : 0) - mouseStr) * Math.min(1, dt * 4);
+  U.uMouseStr.value = mouseStr;
+  grain.uniforms.uTime.value = t;
+  sky.material.uniforms.uGlow.value = THREE.MathUtils.smoothstep(c, LAST - .8, LAST);
+
+  // 摄像机在形态之间飞行 + 呼吸 + 视差
+  const fl = flight(c, camPos, lookTarget);
+  // 飞得最快的时候视角拉宽，速度感更强
+  camera.fov = baseFov + fl.kick * 26;
+  camera.updateProjectionMatrix();
+  setScale();
+  gx += (tgx - gx) * dt * 2; gy += (tgy - gy) * dt * 2;
+  camera.position.copy(camPos);
+  camera.lookAt(lookTarget);
+  camera.updateMatrix();
+  right.setFromMatrixColumn(camera.matrix, 0); up.setFromMatrixColumn(camera.matrix, 1);
+  const iw = infoW(c, camera.aspect < 1);
+  if (iw > 0) {
+    const half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camPos.distanceTo(lookTarget);
+    if (camera.aspect < 1) lookTarget.addScaledVector(up, -half * .34 * iw);
+    else lookTarget.addScaledVector(right, half * camera.aspect * .3 * iw);
+  }
+  camera.position.addScaledVector(right, gx * 1.7 + Math.sin(t * .23) * .25).addScaledVector(up, -gy * 1.1 + Math.sin(t * .31) * .18);
+  camera.lookAt(lookTarget);
+  camera.rotateZ(Math.sin(t * .17) * .02 + gx * -.03 + fl.roll);
+  // 镜头速度 → 速度线、径向模糊
+  const v = prevCam.distanceTo(camera.position) / Math.max(dt, 1e-3);
+  prevCam.copy(camera.position);
+  SPEED.value += (THREE.MathUtils.clamp((v - 6) / 34, 0, 1) - SPEED.value) * Math.min(1, dt * 6);
+  sky.position.copy(camera.position);
+  farDust.position.copy(camera.position);
+
+  updIntro(dt);
+  if (formed && c < .4) {
+    const R = MOON_PX;
+    tmpV.copy(moonPos).project(camera);
+    const mx = (tmpV.x * .5 + .5) * innerWidth, my = (-tmpV.y * .5 + .5) * innerHeight, dy = -R * .72;
+    tagMoon.style.transform = `translate(${mx - Math.sqrt(R * R - dy * dy) - 6}px, ${my + dy}px) translate(-100%, -50%)`;
+    tmpV.copy(peakPos).project(camera);
+    const px = (tmpV.x * .5 + .5) * innerWidth, py = (-tmpV.y * .5 + .5) * innerHeight;
+    tagPeak.style.transform = `translate(${px - 16}px, ${py + 16}px) translate(-100%, -50%)`;
+  }
+  if (introT < 2) {
+    tmpV.copy(moonPos).project(camera);
+    const bx = (tmpV.x * .5 + .5) * innerWidth, by = (-tmpV.y * .5 + .5) * innerHeight;
+    moonBtn.style.transform = `translate(${bx}px, ${by}px)`;
+    guideCall.style.transform = `translate(${bx - 50}px, ${by}px) translate(-100%, -50%)`;
+  }
+  const fadeL = 1 - THREE.MathUtils.smoothstep(c, .12, .72);
+  MT.uFade.value = fadeL; FU.uFade.value = 1 - THREE.MathUtils.smoothstep(c, .03, .25);
+  halo.material.opacity = THREE.MathUtils.smoothstep(introT, 1.5, 4.5) * fadeL;
+  moonDisc.material.opacity = THREE.MathUtils.smoothstep(introT, 2.8, 4.6) * fadeL;
+  sky.material.uniforms.uNight.value = THREE.MathUtils.smoothstep(introT, 1, 5) * fadeL;
+  mountains.forEach(m => { m.visible = fadeL > .01; m.material.depthWrite = fadeL > .6; });
+  pines.forEach(p => {
+    const k = THREE.MathUtils.clamp(MT.uReveal.value * 1.9 - p.userData.layer * .9, 0, 1);
+    p.material.opacity = THREE.MathUtils.smoothstep(k, .25, .7) * fadeL * .92;
+    p.visible = p.material.opacity > .005;
+  });
+  updText(c);
+  updBoats(c, t);
+  decoLayer.style.transform = `translate3d(${-gx * 10}px, ${-gy * 7}px, 0)`;
+  intro.style.transform = `translate3d(${-gx * 8}px, ${-gy * 6}px, 0)`;
+  composer.render();
+  requestAnimationFrame(frame);
+}
+
+addEventListener('resize', () => {
+  fitFov();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+  bloom.resolution.set(innerWidth / 2, innerHeight / 2);
+  setScale();
+});
+
+history.scrollRestoration = 'manual';
+scrollTo(0, 0);
+// 预览用：index.html#p=2 直接跳到第三章
+const hp = /p=([\d.]+)/.exec(location.hash);
+// 预览用：#auto 自动唤月；#auto&t=6 直接跳到开场第 6 秒
+// 预览用：#still 关闭 CSS 过渡，方便截图检查版式
+if (/still/.test(location.hash)) document.head.insertAdjacentHTML('beforeend', '<style>*,*::before,*::after{transition:none!important;animation:none!important}</style>');
+if (/auto/.test(location.hash)) setTimeout(() => { callMoon(); const ht = /t=([\d.]+)/.exec(location.hash); if (ht) introT = +ht[1]; }, 600);
+if (hp) {
+  introT = 99; formed = true;
+  document.body.classList.add('calling', 'formed');
+  scrollCur = Math.min(LAST, +hp[1]);
+  page = Math.round(scrollCur);
+}
+requestAnimationFrame(() => { document.body.classList.add('ready'); frame(); });
+</script>
+<script>
+  // CDN 加载失败时提示
+  setTimeout(() => {
+    if (!document.body.classList.contains('ready'))
+      document.getElementById('loading').textContent = '加载失败 · 请检查网络后刷新';
+  }, 15000);
+</script>
+</body>
+</html>
